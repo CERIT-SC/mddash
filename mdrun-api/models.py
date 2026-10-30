@@ -6,6 +6,7 @@ import k8s_client
 from config import NAMESPACE
 from enums import JobStatus, UsageOutcome
 from extensions import db
+from sqlalchemy import update
 from sqlalchemy.orm import Mapped, mapped_column
 
 logger = logging.getLogger(__name__)
@@ -132,19 +133,21 @@ class MdrunJob(db.Model):  # type: ignore
         if self.status in _TERMINAL:
             return
 
+        self.record_usage(UsageOutcome.STOPPED)
         k8s_client.delete_job(
             ns=NAMESPACE, name=self.job_name, grace_period_seconds=k8s_client.STOP_GRACE_PERIOD_SECONDS
         )
         outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
         self.last_status = JobStatus.FINISHED if outcome == JobStatus.FINISHED else JobStatus.STOPPED
-        self.record_usage(UsageOutcome(self.last_status.value))
         db.session.commit()
 
     def record_usage(self, outcome: UsageOutcome | None = None) -> None:
         """
         Stamp the allocation window from the job's pod; an ``outcome`` also closes it.
 
-        Times the pod no longer reports fall back to now. Closed records never change.
+        Times the pod no longer reports fall back to now. Writes only fill unset fields and hit the database at
+        once, so call this before deleting the Job: a concurrent status read that then finds the Job gone waits
+        on the write lock and leaves the closed window as it is.
         """
         usage = self.usage
         if usage is None or usage.finished_at is not None:
@@ -152,11 +155,12 @@ class MdrunJob(db.Model):  # type: ignore
 
         start, end = k8s_client.get_pod_times(ns=NAMESPACE, name=self.job_name)
         now = datetime.now(UTC)
-        if usage.started_at is None:
-            usage.started_at = start or now
+        window = update(MdrunUsage).where(MdrunUsage.job_id == self.id).execution_options(synchronize_session=False)
+        db.session.execute(window.where(MdrunUsage.started_at.is_(None)).values(started_at=start or now))
         if outcome is not None:
-            usage.finished_at = end or now
-            usage.outcome = outcome
+            db.session.execute(
+                window.where(MdrunUsage.finished_at.is_(None)).values(finished_at=end or now, outcome=outcome)
+            )
 
     def handle_status_change(self, old: JobStatus, new: JobStatus) -> None:
         """Record usage on job status transitions and clean up finalized jobs."""
@@ -165,6 +169,6 @@ class MdrunJob(db.Model):  # type: ignore
         if new == JobStatus.RUNNING:
             self.record_usage()
         elif new in {JobStatus.FINISHED, JobStatus.ERROR}:
-            # Before the delete: it removes the pod, and with it the timestamps.
+            # Before the delete: it removes the pod and its timestamps, and concurrent reads must find the window closed.
             self.record_usage(UsageOutcome(new.value))
             self.delete()

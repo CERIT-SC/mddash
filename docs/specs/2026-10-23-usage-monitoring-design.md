@@ -97,6 +97,8 @@ The resource helpers return numbers that feed both the manifest and the ledger, 
 | `DELETE` | Close if open with `outcome = deleted`. The job row is still deleted, as today. |
 | K8s `NOT_FOUND` while non-terminal | Close at now with `outcome = unknown`. |
 
+Status reads run concurrently, because the dashboard polls the experiment and the run endpoints together and MDRun serves them in parallel. Every path that deletes the Job (finish, stop, `DELETE`) closes the window first, and every ledger write is a conditional `UPDATE` that only fills unset fields. A read that finds the Job already gone then waits on SQLite's write lock and changes nothing, so it can't relabel a finished run as `unknown`.
+
 The report is `python -m usage --since … [--until …] [--csv]`, run inside the mdrun-api image by `make usage ENV=… SINCE=… UNTIL=…` through `kubectl exec`. It adds no new network surface. Columns: user, namespace, jobs, CPU core-h, GPU-h, memory GiB-h, estimated cost.
 
 ### Metrics exporter (phase 2)

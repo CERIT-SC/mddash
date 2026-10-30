@@ -7,9 +7,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from enums import JobStatus, UsageOutcome
+from extensions import db
 from flask.testing import FlaskClient
 from models import MdrunJob, MdrunUsage
 from pytest_mock import MockerFixture
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 from usage import estimated_cost, main, summarize
 
@@ -267,6 +269,74 @@ class TestAllocationWindow:
         assert response.get_json()["status"] == "finished"
         mock_k8s_client["delete_job"].assert_called_once()
         assert db_session.query(MdrunUsage).count() == 0
+
+
+class TestConcurrentStatusReads:
+    """The dashboard reads a job's status from two endpoints at once, and MDRun serves them in parallel."""
+
+    def test_stale_request_cannot_overwrite_a_closed_window(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
+    ) -> None:
+        job_id = _submit(client)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
+        pod_times.return_value = (POD_START, None)
+        client.get(f"/api/jobs/gmx/{job_id}")
+        db_session.expire_all()
+        # This request read the job while it was still running...
+        job = db_session.get(MdrunJob, job_id)
+        assert job is not None
+        stale_usage = job.usage
+        assert stale_usage is not None
+        assert stale_usage.finished_at is None
+        # ...then another request recorded the finish and deleted the Job.
+        db_session.execute(
+            update(MdrunUsage)
+            .where(MdrunUsage.job_id == job_id)
+            .values(finished_at=POD_END, outcome=UsageOutcome.FINISHED)
+            .execution_options(synchronize_session=False)
+        )
+        mock_k8s_client["get_job_status"].return_value = JobStatus.UNKNOWN
+        pod_times.return_value = (None, None)
+
+        _ = job.status
+
+        record = _usage(db_session, job_id)
+        assert (_utc(record.finished_at), record.outcome) == (POD_END, UsageOutcome.FINISHED)
+
+    @pytest.mark.parametrize(
+        ("status", "method", "suffix"),
+        [
+            (JobStatus.FINISHED, "GET", ""),
+            (JobStatus.RUNNING, "POST", "/stop"),
+            (JobStatus.RUNNING, "DELETE", ""),
+        ],
+        ids=["finish", "stop", "delete"],
+    )
+    def test_window_is_closed_before_the_job_is_deleted(
+        self,
+        client: FlaskClient,
+        mock_k8s_client: dict[str, Any],
+        pod_times: MagicMock,
+        status: JobStatus,
+        method: str,
+        suffix: str,
+    ) -> None:
+        # A request that finds the Job gone must also find the window closed.
+        job_id = _submit(client)
+        mock_k8s_client["get_job_status"].return_value = status
+        closed_at_delete: list[object] = []
+
+        def read_window(**_kwargs: object) -> None:
+            # A raw read sees what this request has written, without flushing pending ORM changes.
+            sql = "SELECT finished_at FROM mdrun_usage WHERE job_id = ?"
+            closed_at_delete.append(db.session.connection().exec_driver_sql(sql, (job_id,)).scalar())
+
+        mock_k8s_client["delete_job"].side_effect = read_window
+
+        client.open(f"/api/jobs/gmx/{job_id}{suffix}", method=method)
+
+        assert len(closed_at_delete) == 1
+        assert closed_at_delete[0] is not None
 
 
 def _record(
