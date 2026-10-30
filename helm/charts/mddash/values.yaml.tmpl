@@ -322,6 +322,13 @@ mdrun-api:
       value: "{{ $cfg.gpuType }}"
     - name: GPU_PRODUCT
       value: "{{ $gpuProduct }}"
+    # Same rates as the Tuner; `make usage` prices per-user usage with them.
+    - name: COST_CPU_CORE_HOUR
+      value: "{{ $cfg.tuner.api.pricing.cpuCoreHour }}"
+    - name: COST_GPU_HOUR
+      value: "{{ $cfg.tuner.api.pricing.gpuHour }}"
+    - name: COST_GB_RAM_HOUR
+      value: "{{ $cfg.tuner.api.pricing.gbRamHour }}"
 
 tuner:
   image:

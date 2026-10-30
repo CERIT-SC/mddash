@@ -28,6 +28,17 @@ S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
 GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
 AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "")
 
+
+def _rate(name: str) -> float | None:
+    value = os.environ.get(name)
+    return float(value) if value else None
+
+
+# Hourly rates shared with the Tuner (`tuner.api.pricing`); usage reports leave cost blank without them.
+COST_CPU_CORE_HOUR = _rate("COST_CPU_CORE_HOUR")
+COST_GPU_HOUR = _rate("COST_GPU_HOUR")
+COST_GB_RAM_HOUR = _rate("COST_GB_RAM_HOUR")
+
 logger = logging.getLogger(__name__)
 
 if not all([S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY]):

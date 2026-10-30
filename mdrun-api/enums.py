@@ -78,3 +78,17 @@ class JobStatus(str, Enum):
 
     def __str__(self) -> str:
         return self.value
+
+
+class UsageOutcome(str, Enum):
+    """How a job's allocation window closed."""
+
+    FINISHED = "finished"
+    ERROR = "error"
+    STOPPED = "stopped"
+    DELETED = "deleted"
+    # Vanished from Kubernetes before a terminal status was seen.
+    UNKNOWN = "unknown"
+
+    def __str__(self) -> str:
+        return self.value

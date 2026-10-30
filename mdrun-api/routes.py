@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import k8s_client
 from config import API_PREFIX, NAMESPACE
+from enums import UsageOutcome
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
@@ -15,6 +16,8 @@ from sanitization import (
     sanitize_extra_args,
     sanitize_inpcrd_name,
     sanitize_mdin_name,
+    sanitize_owner,
+    sanitize_owner_namespace,
     sanitize_prmtop_name,
     sanitize_tpr_name,
 )
@@ -54,6 +57,7 @@ def _delete_job(job_id: str) -> ResponseReturnValue:
     """
     job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f"Job {job_id} not found")
 
+    job.record_usage(UsageOutcome.DELETED)
     job.delete()
     db.session.delete(job)
     db.session.commit()
@@ -114,6 +118,8 @@ def create_gmx_job() -> ResponseReturnValue:
     tpr_name = sanitize_tpr_name(data["tpr_name"])
     bucket_name = sanitize_bucket_name(data["bucket_name"])
     extra_args = sanitize_extra_args(data["extra_args"], "gmx")
+    owner = sanitize_owner(data["owner"])
+    owner_namespace = sanitize_owner_namespace(data["owner_namespace"])
 
     pme: DeviceType = data["pme"]
     nb: DeviceType = data["nb"]
@@ -133,9 +139,19 @@ def create_gmx_job() -> ResponseReturnValue:
         np=data["np"],
         ntomp=data["ntomp"],
         extra_args=extra_args,
+        owner=owner,
+        owner_namespace=owner_namespace,
     )
 
-    job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
+    job = MdrunJob.create(
+        job_id=job_id,
+        job_name=job_name,
+        experiment_id=experiment_id,
+        engine="gmx",
+        resources=k8s_client.gmx_resources(data["np"], data["ntomp"], nb.value, pme.value),
+        owner=owner,
+        owner_namespace=owner_namespace,
+    )
     logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
@@ -191,6 +207,8 @@ def create_amber_job() -> ResponseReturnValue:
     mdin_name = sanitize_mdin_name(data["mdin_name"])
     bucket_name = sanitize_bucket_name(data["bucket_name"])
     extra_args = sanitize_extra_args(data["extra_args"], "amber")
+    owner = sanitize_owner(data["owner"])
+    owner_namespace = sanitize_owner_namespace(data["owner_namespace"])
 
     binary: AmberBinary = data["binary"]
     ewald: EwaldPreset = data["ewald"]
@@ -211,9 +229,19 @@ def create_amber_job() -> ResponseReturnValue:
         ntomp=data["ntomp"],
         ewald=ewald.value,
         extra_args=extra_args,
+        owner=owner,
+        owner_namespace=owner_namespace,
     )
 
-    job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
+    job = MdrunJob.create(
+        job_id=job_id,
+        job_name=job_name,
+        experiment_id=experiment_id,
+        engine="amber",
+        resources=k8s_client.amber_resources(binary.value, data["np"], data["ntomp"]),
+        owner=owner,
+        owner_namespace=owner_namespace,
+    )
     logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED

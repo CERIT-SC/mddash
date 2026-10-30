@@ -3,7 +3,7 @@
 from http import HTTPStatus
 
 import httpx
-from core.config import MDRUN_API_URL
+from core.config import JUPYTER_USER, MDRUN_API_URL, NAMESPACE
 
 from clients.http import raise_for_status
 
@@ -14,10 +14,17 @@ WRITE_TIMEOUT = 10
 class MDRunClient:
     """GROMACS and AMBER jobs on the MDRun API; `engine` is the API path segment (`gmx`, `amber`)."""
 
-    def __init__(self, http: httpx.AsyncClient, base_url: str = MDRUN_API_URL) -> None:
-        """Bind to the shared HTTP client."""
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        base_url: str = MDRUN_API_URL,
+        owner: str = JUPYTER_USER,
+        owner_namespace: str = NAMESPACE,
+    ) -> None:
+        """Bind to the shared HTTP client; created jobs are attributed to `owner` in MDRun's usage ledger."""
         self._http = http
         self._base_url = base_url
+        self._owner = {key: value for key, value in (("owner", owner), ("owner_namespace", owner_namespace)) if value}
 
     async def _json(self, method: str, path: str, request_timeout: float, json: dict | None = None) -> dict:
         response = await self._http.request(method, f"{self._base_url}{path}", timeout=request_timeout, json=json)
@@ -66,6 +73,7 @@ class MDRunClient:
             "np": np,
             "ntomp": ntomp,
             "extra_args": extra_args,
+            **self._owner,
         }
         return await self._json("POST", "/jobs/gmx", WRITE_TIMEOUT, json=data)
 
@@ -94,5 +102,6 @@ class MDRunClient:
             "np": np,
             "ntomp": ntomp,
             "extra_args": extra_args,
+            **self._owner,
         }
         return await self._json("POST", "/jobs/amber", WRITE_TIMEOUT, json=data)

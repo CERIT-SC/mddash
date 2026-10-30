@@ -22,6 +22,8 @@ class GmxJobCreateRequestSchema(Schema):
     np = fields.Int(required=True, validate=validate.Range(min=1))
     ntomp = fields.Int(required=True, validate=validate.Range(min=1))
     extra_args = fields.Str(load_default="")
+    owner = fields.Str(load_default=None, allow_none=True)
+    owner_namespace = fields.Str(load_default=None, allow_none=True)
 
     @post_load
     def _convert_enums(self, data: dict, **_kwargs: object) -> dict:
@@ -43,6 +45,8 @@ class AmberJobCreateRequestSchema(Schema):
     ntomp = fields.Int(required=True, validate=validate.Range(min=1))
     ewald = fields.Str(required=True)
     extra_args = fields.Str(load_default="")
+    owner = fields.Str(load_default=None, allow_none=True)
+    owner_namespace = fields.Str(load_default=None, allow_none=True)
 
     @post_load
     def _convert_enums(self, data: dict, **_kwargs: object) -> dict:
