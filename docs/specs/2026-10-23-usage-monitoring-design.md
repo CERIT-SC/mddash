@@ -13,7 +13,7 @@ The services therefore record usage themselves, and Grafana reads it:
 1. **Usage ledger (MDRun).** An append-only `mdrun_usage` table records owner, requested resources, and allocation start/end per job, and is never deleted. `make usage` prints per-user CPU-hours, GPU-hours, and estimated cost for any period.
 2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived counters on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`.
 3. **Tuner ledger**, with the same shape per trial.
-4. **User namespaces** (notebooks, GPU notebooks, analysis) via CERIT's `project-stats` exporter, if the phase 0 spike shows it covers the whole Rancher project.
+4. **User namespaces** (notebooks, GPU notebooks, analysis) via a collector of our own, because phase 0 found CERIT's `project-stats` exporter unusable without extra RBAC.
 
 Each phase ships on its own. Phase 1 alone answers the issue's primary ask.
 
@@ -30,8 +30,18 @@ Each phase ships on its own. Phase 1 alone answers the issue's primary ask.
 | Tuner prices resources already (`tuner.api.pricing`: CPU-core-hour, GPU-hour, GB-RAM-hour; `ResourceFootprint.hourly_cost()`). | One set of rates serves all cost estimates. |
 | Every hub-namespace pod must declare requests and limits (Rancher ResourceQuota) and be listed in `scripts/resource_summary.py`. SQLite and Prometheus TSDB need block storage (`csi-ceph-rbd-du`), never NFS. | These constrain the monitoring subcharts. |
 | The chart already ships a condition-gated third-party subchart (SeaweedFS). Tuner already relies on a NetworkPolicy to isolate Ray. | Use the same patterns for Prometheus/Grafana and for restricting the metrics port. |
-| e-INFRA *Personal Monitoring* (Rancher app, chart `cerit-sc/monitoring-personal`) runs a Prometheus without a PV (14 d retention) that scrapes only CERIT's `project-stats` exporter: `container_resource_{request,limit,usage}{namespace,pod,container,resource}` (incl. `nvidia_com_gpu`) and `namespace_quota`. A namespace can hold at most one instance, with Grafana at `pmon-<ns>.dyn.cloud.e-infra.cz`. It has no pod labels, no GPU utilization, and a fixed scrape config. | Good for a quick namespace-level look. It cannot attribute MDRun or hold accounting history. Its exporter may serve phase 4. |
+| e-INFRA *Personal Monitoring* (Rancher app, chart `cerit-sc/monitoring-personal`) runs a Prometheus without a PV (14 d retention) that scrapes only CERIT's `project-stats` exporter: `container_resource_{request,limit,usage}{namespace,pod,container,resource}` (incl. `nvidia_com_gpu`) and `namespace_quota`. A namespace can hold at most one instance, with Grafana at `pmon-<ns>.dyn.cloud.e-infra.cz`. It has no pod labels, no GPU utilization, and a fixed scrape config. | Good for a quick namespace-level look. It cannot attribute MDRun or hold accounting history. |
 | CERIT's chart repo includes `pod-banking` (pod metrics into InfluxDB, cluster-scoped RBAC). | CERIT may already record per-namespace usage. Ask before building phase 4. |
+
+## Phase 0 findings
+
+From a spike on dev (`mddash-dev`) on 2026-10-29.
+
+| Finding | Consequence |
+|---|---|
+| Tenants may create Prometheus operator objects (`Prometheus`, ServiceMonitor, PodMonitor, PrometheusRule). A test `Prometheus` became Ready within quota. | Phase 2 still runs its own Prometheus from the subchart. |
+| `metrics.k8s.io` works for users (`kubectl top pods`). There is no kubelet/cAdvisor access (`nodes/proxy`) and no node read. | Measured usage is limited to current snapshots. |
+| `project-stats` reads `pods.metrics.k8s.io`, pod requests, and quotas through its pod's ServiceAccount. In `mddash-dev` it fails with `cannot list pods.metrics.k8s.io`. | Phase 4 builds its own collector. |
 
 ## Options
 
@@ -40,7 +50,7 @@ Each phase ships on its own. Phase 1 alone answers the issue's primary ask.
 | Option | Pros | Cons |
 |---|---|---|
 | **A. Service-level ledger (recommended)** | Exact owner attribution. Durable on the existing block PVC. Independent of platform monitoring. Reports cover any period. | Allocation-based (requested × wall time), not measured utilization. Owner is client-asserted. |
-| B. Cluster metrics + pod labels | Measured CPU/memory utilization. | Tenant access to kubelet/kube-state-metrics is unlikely (phase 0 confirms). `project-stats` drops pod labels. Retention is too short for accounting. Still needs an owner join metric. |
+| B. Cluster metrics + pod labels | Measured CPU/memory utilization. | Tenants get no kubelet/cAdvisor access, only `metrics.k8s.io` snapshots (phase 0). `project-stats` drops pod labels. Retention is too short for accounting. Still needs an owner join metric. |
 | C. Run MDRun Jobs in the user's namespace | Attribution and per-user quotas come from the namespace. | Cross-cutting redesign: MDRun RBAC and S3 credentials per namespace, quota sizing for 16-CPU/GPU jobs. Still needs durable history. Warrants its own design if per-user fairness becomes a goal. |
 
 Allocation is the right basis for cost: a reserved GPU is unavailable to others whether or not the job saturates it.
@@ -133,14 +143,15 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
 - The worker's idle tail after the last trial (up to `idleTimeoutSeconds`, 1 h in prod) is platform overhead and stays unattributed. Phase 4 shows it as `tuner-raycluster-workers-*` usage.
 - Tuner uses the same exporter pattern and port, and its panels join the usage dashboard.
 
-### User namespaces (phase 4, gated on phase 0)
+### User namespaces (phase 4)
 
-User namespaces are already per user, so attribution is free. If `project-stats` reports every namespace in the Rancher project, phase 4:
+User namespaces are already per user, so attribution is free. `project-stats` needs RBAC we lack (phase 0), so phase 4 adds a collector to the hub namespace and scrapes it from our Prometheus:
 
-- deploys it in the hub namespace and scrapes it from our Prometheus;
-- adds panels for per-namespace CPU/memory/GPU requests and usage (GPU notebooks, analysis jobs) and for Tuner worker overhead.
+- Per-namespace CPU/memory/GPU requests across the Rancher project, through the pod list the hub role template already grants.
+- Measured usage once a Rancher admin adds `metrics.k8s.io` pods get/list to `helm/rbac/roletemplate.yaml`.
+- Panels for user namespaces (GPU notebooks, analysis jobs) and Tuner worker overhead.
 
-Otherwise, ask CERIT for `pod-banking` exports or kube-state-metrics access before building anything.
+Ask CERIT about `pod-banking` first: if it already records per-namespace usage, its exports may replace the collector.
 
 ## Plan
 
@@ -150,7 +161,7 @@ Otherwise, ask CERIT for `pod-banking` exports or kube-state-metrics access befo
 | 1. MDRun ledger + report | M | Owner fields (dashboard MDRun client, gmx submit/extend, amber submit, demo fakes). Schema and sanitization. Labels. `mdrun_usage` model and write points. Pod-time helper in `k8s_client`. Pricing env on mdrun-api. `usage` CLI and `make usage`. Docs (`mdrun-api/AGENTS.md`, root `AGENTS.md`). | Unit tests for each write point, window clipping, unattributed rows, and old-client payloads. On dev, run a short job: `make usage ENV=dev` shows it, and `kubectl get pods -l mddash.io/workload=mdrun` shows the labels. |
 | 2. Prometheus + Grafana | M | Exporter on the poller. NetworkPolicy. Subcharts behind `monitoring.enabled`. Dashboard JSON. `make grafana`. `resource_summary.py`. `docs/deployment.md`, `docs/resource-management.md`. | `make validate-charts`. On dev: Prometheus target up, and the dashboard matches `make usage` for the same range. |
 | 3. Tuner ledger | S-M | Form fields, trial timing, migration, exporter, panels. | Unit and migration tests. `make -C tuner e2e ENV=dev` produces a job that appears in `make usage` and Grafana. |
-| 4. Namespace usage | S | `project-stats` deployment, scrape config, panels. | A dev user namespace and the Tuner worker appear in Grafana. |
+| 4. Namespace usage | S-M | Collector for per-namespace requests (and usage once RBAC allows), scrape config, panels. | A dev user namespace and the Tuner worker appear in Grafana. |
 
 Every phase passes `make fix`, `make type-check`, `make knip`, `make test`, and `make e2e`.
 
