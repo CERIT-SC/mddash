@@ -38,6 +38,15 @@ def _utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
+def allocated_seconds(record: MdrunUsage, since: datetime, until: datetime, now: datetime) -> float:
+    """Seconds of the job's allocation window inside ``[since, until)``; an open window runs until ``now``."""
+    if record.started_at is None:
+        return 0.0
+    start = max(_utc(record.started_at), since)
+    end = min(_utc(record.finished_at) if record.finished_at else now, until)
+    return max((end - start).total_seconds(), 0.0)
+
+
 def summarize(records: Iterable[MdrunUsage], since: datetime, until: datetime, now: datetime) -> list[OwnerUsage]:
     """
     Totals per owner, with each allocation window clipped to ``[since, until)``.
@@ -49,12 +58,8 @@ def summarize(records: Iterable[MdrunUsage], since: datetime, until: datetime, n
     """
     totals: dict[tuple[str | None, str | None], OwnerUsage] = {}
     for record in records:
-        if record.started_at is None:
-            continue
-        start = max(_utc(record.started_at), since)
-        end = min(_utc(record.finished_at) if record.finished_at else now, until)
-        hours = (end - start).total_seconds() / SECONDS_PER_HOUR
-        if hours <= 0:
+        hours = allocated_seconds(record, since, until, now) / SECONDS_PER_HOUR
+        if not hours:
             continue
 
         key = (record.owner, record.owner_namespace)

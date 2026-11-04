@@ -37,3 +37,4 @@ docker push <image>:latest
 - `S3_CREDENTIALS`: S3 access credentials
 - `S3_ENDPOINT`: S3 endpoint URL
 - `COST_CPU_CORE_HOUR`, `COST_GPU_HOUR`, `COST_GB_RAM_HOUR`: Hourly rates for usage cost estimates (optional; the report leaves cost blank without them)
+- `METRICS_PORT`: Port on which the poller serves per-user usage metrics for Prometheus (optional; unset serves none)
