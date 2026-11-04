@@ -11,7 +11,7 @@ Today nothing can answer "who used what". MDRun and Tuner jobs run in the hub na
 The services therefore record usage themselves, and Grafana reads it:
 
 1. **Usage ledger (MDRun).** An append-only `mdrun_usage` table records owner, requested resources, and allocation start/end per job, and is never deleted. `make usage` prints per-user CPU-hours, GPU-hours, and estimated cost for any period.
-2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived counters on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`.
+2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived totals on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`.
 3. **Tuner ledger**, with the same shape per trial.
 4. **User namespaces** (notebooks, GPU notebooks, analysis) via a collector of our own, because phase 0 found CERIT's `project-stats` exporter unusable without extra RBAC.
 
@@ -113,23 +113,26 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
 
 ### Metrics exporter (phase 2)
 
-- The poller container serves `/metrics` on port 9100 with `prometheus_client`. A custom collector queries the ledger at scrape time, so counters survive restarts and gunicorn multiprocess mode is unnecessary.
+- The poller container serves `/metrics` on `METRICS_PORT` (9100) with `prometheus_client`. A custom collector recomputes every series from the ledger at scrape time, so values survive restarts and gunicorn multiprocess mode is unnecessary. It shares the window rules with `make usage` (`usage.allocated_seconds`).
+- Cumulative usage is a gauge, not a counter. A window closes at the container's exit, which MDRun can notice after a scrape already counted the job as running, so the total can step back by up to that delay. Prometheus reads any counter decrease as a reset and would count the whole total again. Usage over a period is the value at its end minus the value at its start (`x - x offset d`), never `rate()` or `increase()`.
 - A NetworkPolicy keeps port 5000 open as today and admits 9100 only from the Prometheus pod. Usernames do not leave the hub namespace.
-- Series carry the labels `user`, `namespace`, and `engine`. Cardinality is tens of users.
-  - Counters: `mddash_mdrun_jobs_started_total`, `mddash_mdrun_cpu_core_seconds_total`, `mddash_mdrun_gpu_seconds_total`, `mddash_mdrun_memory_gib_seconds_total`.
-  - Gauges: `mddash_mdrun_allocated_cpu_cores`, `mddash_mdrun_allocated_gpus`.
+- Series carry the labels `user`, `namespace`, and `engine`. Unattributed jobs have empty `user` and `namespace`. Cardinality is tens of users.
+  - Cumulative: `mddash_mdrun_jobs_started`, `mddash_mdrun_cpu_core_seconds`, `mddash_mdrun_gpu_seconds`, `mddash_mdrun_memory_gib_seconds`.
+  - Held by running jobs: `mddash_mdrun_allocated_cpu_cores`, `mddash_mdrun_allocated_gpus`, `mddash_mdrun_allocated_memory_gib`.
 
 ### Monitoring stack (phase 2)
 
 - `monitoring.enabled` in `config*.yaml` gates two subcharts. Enable on dev first.
-  - `prometheus-community/prometheus`: server only (no Alertmanager, kube-state-metrics, node-exporter, pushgateway, or configmap-reload), `rbac.create: false`, static scrape targets.
-  - `grafana/grafana`: no RBAC, no dashboard sidecar, no init-chown.
-- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with ~13 months of retention. At this cardinality it stays small.
+  - `prometheus-community/prometheus`: server only (no Alertmanager, kube-state-metrics, node-exporter, or pushgateway), `rbac.create: false`, and static scrape targets (itself and `mdrun-api:9100`) with the chart's discovery jobs off. The config reloader stays, with explicit resources, so a scrape-config change applies on `helm upgrade` without a restart.
+  - `grafana` from `grafana-community` (the `grafana/helm-charts` copy is deprecated): no RBAC, no dashboard sidecar, no init-chown.
+- Neither pod mounts a ServiceAccount token, because every hub-namespace service account holds the hub's project role.
+- NetworkPolicies let only Grafana reach Prometheus and nothing reach Grafana. `kubectl port-forward` still reaches both.
+- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with 13 months of retention (`395d`). At this cardinality it stays small.
 - Grafana is stateless. Its datasource and dashboards are provisioned from `helm/charts/mddash/dashboards/*.json`. Anonymous Viewer with `viewers_can_edit` enables Explore.
 - Every container gets the e-INFRA hardening (non-root, seccomp `RuntimeDefault`, drop `ALL`) and explicit resources, and is added to `scripts/resource_summary.py`.
 - The "Usage by user" dashboard shows:
-  - a per-user table for the selected range (`increase(…[$__range])`);
-  - allocated GPUs and CPUs over time, stacked by user;
+  - a per-user table for the selected range (each total minus its value `offset $__range`; series that start inside the range count from zero);
+  - GPUs and CPU cores held over time, stacked by user;
   - jobs started by engine.
 - `make usage` keeps exact long-range accounting. Grafana ranges are bounded by Prometheus retention.
 
@@ -168,9 +171,9 @@ Every phase passes `make fix`, `make type-check`, `make knip`, `make test`, and 
 ## Open decisions
 
 1. Ledger first (A, with G3 then G1), or Personal Monitoring (G2) only.
-2. Grafana access: port-forward to start, or SSO ingress from day one.
+2. Grafana access: port-forward to start (phase 2 ships this), or SSO ingress from day one.
 3. Pricing: reuse `tuner.api.pricing` for MDRun estimates as is, or promote it to a top-level `pricing` key.
-4. Retention of per-user usage data: keep the ledger indefinitely? Keep Prometheus for 13 months?
+4. Retention of per-user usage data: keep the ledger indefinitely? Keep Prometheus for 13 months (phase 2 ships this)?
 5. Trust model: accept a client-asserted `owner` now, and track per-user authentication for MDRun/Tuner as a separate security issue.
 
 ## Non-goals

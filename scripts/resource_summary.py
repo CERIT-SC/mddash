@@ -148,6 +148,10 @@ LANDING = row_mib("landing page", 50, 32, 100, 64)
 # seaweedfs.allInOne.resources block in helm/charts/mddash/values.yaml.tmpl.
 S3_STORE = row_mib("s3 store (seaweedfs)", 100, 256, 1000, 1024)
 
+# Prometheus config reloader sidecar, only when monitoring.enabled. Keep in sync with
+# prometheus.configmapReload.prometheus.resources in helm/charts/mddash/values.yaml.tmpl.
+PROMETHEUS_RELOADER = row_mib("prometheus config reloader", 10, 32, 100, 64)
+
 
 def compute_budget(config: str) -> dict:
     b: dict = {"config": config, "namespace": yq(".namespace", config), "gpu_type": yq('.gpuType // ""', config)}
@@ -205,6 +209,12 @@ def compute_budget(config: str) -> dict:
     ]
     if yq(".s3.seaweedfs.enabled // false", config) == "true":
         b["hub_services"].append(S3_STORE)
+    if yq(".monitoring.enabled // false", config) == "true":
+        b["hub_services"] += [
+            row_cfg("prometheus", config, ".monitoring.prometheus.resources"),
+            PROMETHEUS_RELOADER,
+            row_cfg("grafana", config, ".monitoring.grafana.resources"),
+        ]
     b["services_total"] = total("Services total", b["hub_services"])
     # KubeRay autoscaler. Zero workers when idle, up to maxReplicas under load.
     b["ray_idle_timeout"] = yq(".tuner.worker.idleTimeoutSeconds", config)

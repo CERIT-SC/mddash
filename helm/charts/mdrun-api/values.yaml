@@ -18,6 +18,13 @@ gunicorn:
   workers: 2
   threads: 4
 
+metrics:
+  # The poller serves per-user usage from the ledger. Series carry usernames, so a NetworkPolicy
+  # admits only pods matching prometheusPodLabels to this port.
+  enabled: false
+  port: 9100
+  prometheusPodLabels: {}
+
 polling:
   # Poller runs as a sidecar in this pod, sharing the /data PVC.
   intervalSeconds: 900

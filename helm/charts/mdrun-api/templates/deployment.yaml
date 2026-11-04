@@ -83,6 +83,11 @@ spec:
           runAsNonRoot: true
           seccompProfile:
             type: RuntimeDefault
+        {{- if .Values.metrics.enabled }}
+        ports:
+        - name: metrics
+          containerPort: {{ .Values.metrics.port }}
+        {{- end }}
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -92,6 +97,10 @@ spec:
           value: "mdrun-api-data"
         - name: POLL_INTERVAL_SECONDS
           value: "{{ .Values.polling.intervalSeconds }}"
+        {{- if .Values.metrics.enabled }}
+        - name: METRICS_PORT
+          value: "{{ .Values.metrics.port }}"
+        {{- end }}
         - name: TZ
           value: "UTC"
         {{- if .Values.env }}

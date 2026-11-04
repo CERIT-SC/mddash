@@ -1,0 +1,312 @@
+{
+  "uid": "mddash-usage",
+  "title": "Usage by user",
+  "description": "MDRun allocation per user: requested resources x pod lifetime, from the MDRun usage ledger.",
+  "tags": [
+    "mddash"
+  ],
+  "editable": false,
+  "graphTooltip": 1,
+  "timezone": "utc",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "version": 1,
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Usage in the selected range",
+      "description": "Same basis as `make usage`, which stays the exact record. Jobs whose finish MDRun noticed after a range boundary are off by at most the poll interval. A range that starts before Prometheus' first sample counts each user's usage since the ledger began.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_jobs_started) - sum by (user, namespace) (mddash_mdrun_jobs_started offset $__range)) or sum by (user, namespace) (mddash_mdrun_jobs_started), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_cpu_core_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_cpu_core_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_cpu_core_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_gpu_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_gpu_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_gpu_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_memory_gib_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_memory_gib_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_memory_gib_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "user": 0,
+              "namespace": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5
+            },
+            "renameByName": {
+              "user": "User",
+              "namespace": "Namespace",
+              "Value #A": "Jobs",
+              "Value #B": "CPU core-h",
+              "Value #C": "GPU-h",
+              "Value #D": "Memory GiB-h"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Jobs"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "GPU-h",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "GPUs held by running jobs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (user) (mddash_mdrun_allocated_gpus), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "legendFormat": "{{user}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU cores held by running jobs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (user) (mddash_mdrun_allocated_cpu_cores), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "legendFormat": "{{user}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Jobs started",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "interval": "1h",
+      "maxDataPoints": 60,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clamp_min(sum by (engine) (mddash_mdrun_jobs_started) - sum by (engine) (mddash_mdrun_jobs_started offset $__interval), 0)",
+          "legendFormat": "{{engine}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}
