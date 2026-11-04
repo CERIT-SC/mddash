@@ -1,5 +1,6 @@
 """Unit tests for the MDRun HTTP client."""
 
+import json
 from http import HTTPStatus
 
 import httpx
@@ -62,6 +63,20 @@ class TestJobCalls:
         body = route.calls.last.request.read()
         assert b'"pme":"cpu"' in body
         assert b'"extra_args":"-v"' in body
+
+    async def test_create_calls_attribute_jobs_to_the_pod_user(
+        self, http_mock: respx.MockRouter, mdrun: MDRunClient
+    ) -> None:
+        created = httpx.Response(201, json={"id": "j1", "status": "PENDING"})
+        gmx = http_mock.post(f"{MDRUN_API_URL}/jobs/gmx").mock(return_value=created)
+        amber = http_mock.post(f"{MDRUN_API_URL}/jobs/amber").mock(return_value=created)
+
+        await mdrun.create_gmx_job("abcde", "md.tpr", "bucket", "cpu", "gpu", 2, 4)
+        await mdrun.create_amber_job("abcde", "a.prmtop", "a.rst7", "a.mdin", "bucket", "pmemd.cuda", "default", 1, 4)
+
+        for route in (gmx, amber):
+            body = json.loads(route.calls.last.request.read())
+            assert (body["owner"], body["owner_namespace"]) == ("testuser", "test-namespace")
 
     async def test_delete_treats_404_as_deleted(self, http_mock: respx.MockRouter, mdrun: MDRunClient) -> None:
         http_mock.delete(f"{MDRUN_API_URL}/jobs/amber/gone").mock(return_value=httpx.Response(404))

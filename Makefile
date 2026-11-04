@@ -294,6 +294,11 @@ logs: ## Show deployment logs
 resources: ## Show offline resource budget and recommended namespace quota values
 	@python3 scripts/resource_summary.py $(config)
 
+.PHONY: usage
+usage: ## Show per-user MDRun usage. Optional: SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD CSV=1
+	@kubectl -n "$(namespace)" exec deploy/mdrun-api -c mdrun-api -- \
+		python -m usage $(if $(SINCE),--since "$(SINCE)") $(if $(UNTIL),--until "$(UNTIL)") $(if $(CSV),--csv)
+
 # Rollback
 
 .PHONY: history

@@ -10,6 +10,11 @@ _TPR_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,246}$")
 # prevents shell injection via whitespace/metacharacters.
 _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 
+# The owner namespace doubles as a Kubernetes label value.
+_DNS1123_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+# Fits the ledger column and a pod annotation.
+_OWNER_RE = re.compile(r"^[^\s\x00-\x1f\x7f]{1,255}$")
+
 _EXTRA_ARGS_FORBIDDEN_RE = re.compile(r"[;&|><`]|\$\(|\$\{|\n|\r|\x00")
 _EXTRA_ARGS_FORBIDDEN_FLAGS: dict[str, set[str]] = {
     "gmx": {
@@ -98,6 +103,42 @@ def sanitize_bucket_name(bucket_name: str) -> str:
     if not _BUCKET_NAME_RE.fullmatch(bucket_name):
         raise ValidationError("Invalid bucket_name.")
     return bucket_name
+
+
+def sanitize_owner(owner: str | None) -> str | None:
+    """
+    Validate the submitting user's name; blank means unattributed.
+
+    Returns:
+        The stripped username, or None when absent.
+
+    Raises:
+        ValidationError: If the name has whitespace or control characters, or exceeds 255 characters.
+    """
+    owner = (owner or "").strip()
+    if not owner:
+        return None
+    if not _OWNER_RE.fullmatch(owner):
+        raise ValidationError("Invalid owner.")
+    return owner
+
+
+def sanitize_owner_namespace(owner_namespace: str | None) -> str | None:
+    """
+    Validate the submitting user's namespace; blank means unattributed.
+
+    Returns:
+        The stripped namespace, or None when absent.
+
+    Raises:
+        ValidationError: If the namespace is not a DNS-1123 label.
+    """
+    owner_namespace = (owner_namespace or "").strip()
+    if not owner_namespace:
+        return None
+    if not _DNS1123_LABEL_RE.fullmatch(owner_namespace):
+        raise ValidationError("Invalid owner_namespace.")
+    return owner_namespace
 
 
 def sanitize_extra_args(extra_args: str, engine: str) -> str:

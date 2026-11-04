@@ -138,3 +138,17 @@ The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns.
 
 - `POST /api/.../notebook` accepts optional `{"tier": "2x", "gpu": true}` JSON body
 - `GET /api/.../notebook-config` returns available tiers, the default tier, and `concurrentLimit` (max concurrent notebook pods per user)
+
+---
+
+## Per-user usage
+
+MDRun jobs run in the hub namespace, so namespace metrics cannot tell users apart. MDRun records each job in a usage ledger (`mdrun_usage`) instead: the owner sent by the dashboard API, the requested CPU cores, memory, and GPUs, and the time from pod start to last container exit.
+
+```
+make usage ENV=prod                                     # current month so far
+make usage ENV=prod SINCE=2026-09-01 UNTIL=2026-10-01   # one month
+make usage ENV=prod SINCE=2026-09-01 CSV=1 > usage.csv  # for a spreadsheet
+```
+
+The report runs inside the `mdrun-api` pod (`kubectl exec`). Usage is allocation, not measured utilization: a reserved GPU counts in full even when idle. Windows are clipped to the period, and running jobs count up to now. The estimated cost uses the Tuner's `tuner.api.pricing` rates. Jobs submitted before the ledger existed are not in the report. Jobs from clients that send no owner, such as user pods still on an older dashboard image, are reported as unattributed.

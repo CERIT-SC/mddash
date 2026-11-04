@@ -2,6 +2,8 @@ import logging
 import os
 import re
 import shlex
+from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -40,6 +42,45 @@ _POD_PHASE_STATUS = {
     "Succeeded": JobStatus.FINISHED,
     "Failed": JobStatus.ERROR,
 }
+
+
+@dataclass(frozen=True)
+class JobResources:
+    """What a simulation container reserves; requests equal limits."""
+
+    cpu: int
+    memory_gib: int
+    gpus: int
+
+    def to_k8s(self) -> dict[str, Any]:
+        """Kubernetes requests and limits for the simulation container."""
+        quantities = {"cpu": str(self.cpu), "memory": f"{self.memory_gib}Gi", GPU_TYPE: str(self.gpus)}
+        return {"requests": quantities, "limits": dict(quantities)}
+
+
+def gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> JobResources:
+    """Size a GROMACS run: a core per OpenMP thread of each rank, 4 GiB per rank, a GPU when any work is offloaded."""
+    use_gpu = "gpu" in {nb.lower(), pme.lower()}
+    return JobResources(cpu=np * ntomp, memory_gib=4 * np, gpus=1 if use_gpu else 0)
+
+
+def amber_resources(binary: str, np: int, ntomp: int) -> JobResources:
+    """Size an AMBER run: MPI ranks for pmemd.MPI, one process with a GPU for pmemd.cuda."""
+    binary = binary.lower()
+    if binary == "pmemd.mpi":
+        return JobResources(cpu=np * ntomp, memory_gib=4 * np, gpus=0)
+    return JobResources(cpu=ntomp, memory_gib=4, gpus=1 if binary == "pmemd.cuda" else 0)
+
+
+def _owner_metadata(
+    engine: str, owner: str | None, owner_namespace: str | None
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Labels and annotations attributing a job to its user; usernames are not always valid label values."""
+    labels = {"mddash.io/workload": "mdrun", "mddash.io/engine": engine}
+    if owner_namespace:
+        labels["mddash.io/user-namespace"] = owner_namespace
+    annotations = {"mddash.io/user": owner} if owner else {}
+    return labels, annotations
 
 
 def _q(value: str) -> str:
@@ -144,22 +185,27 @@ def _build_job_manifest(
     sim_command: str,
     sim_resources: dict[str, Any],
     use_gpu: bool,
+    engine: str,
+    owner: str | None,
+    owner_namespace: str | None,
     sim_env: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     s3_init = _s3_init_command(exp_dir, remote)
     s3_sync = _s3_sync_command(working_dir, sync_remote)
     vol_mount = _volume_mount()
     rclone_env = _rclone_env()
+    labels, annotations = _owner_metadata(engine, owner, owner_namespace)
+    annotations_field = {"annotations": annotations} if annotations else {}
 
     return {
         "apiVersion": "batch/v1",
         "kind": "Job",
-        "metadata": {"name": name, "namespace": ns, "labels": {"app": name}},
+        "metadata": {"name": name, "namespace": ns, "labels": {"app": name, **labels}, **annotations_field},
         "spec": {
             "backoffLimit": 0,
             "ttlSecondsAfterFinished": 3600,
             "template": {
-                "metadata": {"labels": {"job": name}},
+                "metadata": {"labels": {"job": name, **labels}, **annotations_field},
                 "spec": {
                     "restartPolicy": "Never",
                     "securityContext": {"fsGroup": 1000},
@@ -207,21 +253,6 @@ def _build_job_manifest(
                     ],
                 },
             },
-        },
-    }
-
-
-def _gmx_resources(np: int, ntomp: int, use_gpu: bool) -> dict[str, Any]:
-    return {
-        "requests": {
-            "cpu": str(np * ntomp),
-            "memory": f"{4 * np}Gi",
-            GPU_TYPE: "1" if use_gpu else "0",
-        },
-        "limits": {
-            "cpu": str(np * ntomp),
-            "memory": f"{4 * np}Gi",
-            GPU_TYPE: "1" if use_gpu else "0",
         },
     }
 
@@ -280,15 +311,6 @@ def _amber_command(
     return command, False
 
 
-def _amber_resources(binary: str, np: int, ntomp: int, use_gpu: bool) -> dict[str, Any]:
-    cpu = str(np * ntomp) if binary == "pmemd.mpi" else str(ntomp)
-    memory = f"{4 * np}Gi" if binary == "pmemd.mpi" else "4Gi"
-    return {
-        "requests": {"cpu": cpu, "memory": memory, GPU_TYPE: "1" if use_gpu else "0"},
-        "limits": {"cpu": cpu, "memory": memory, GPU_TYPE: "1" if use_gpu else "0"},
-    }
-
-
 def create_gromacs_job(
     ns: str,
     bucket_name: str,
@@ -300,6 +322,8 @@ def create_gromacs_job(
     nb: str,
     pme: str,
     extra_args: str,
+    owner: str | None = None,
+    owner_namespace: str | None = None,
 ) -> None:
     """Create a GROMACS MD simulation job in Kubernetes."""
     if ping_resource("job", name, ns):
@@ -353,8 +377,11 @@ def create_gromacs_job(
         sync_remote=sync_remote,
         sim_image=GMX_IMAGE,
         sim_command=gromacs_command,
-        sim_resources=_gmx_resources(np, ntomp, use_gpu),
+        sim_resources=gmx_resources(np, ntomp, nb, pme).to_k8s(),
         use_gpu=use_gpu,
+        engine="gmx",
+        owner=owner,
+        owner_namespace=owner_namespace,
         sim_env=[
             {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
             {"name": "TZ", "value": "UTC"},
@@ -385,6 +412,8 @@ def create_amber_job(
     ntomp: int,
     ewald: str,
     extra_args: str,
+    owner: str | None = None,
+    owner_namespace: str | None = None,
 ) -> None:
     """Create an AMBER MD simulation job in Kubernetes."""
     if ping_resource("job", name, ns):
@@ -423,8 +452,11 @@ def create_amber_job(
         sync_remote=_sim_sync_remote(bucket_name, experiment_id, mdin_name),
         sim_image=AMBER_IMAGE,
         sim_command=amber_command,
-        sim_resources=_amber_resources(binary, np, ntomp, use_gpu),
+        sim_resources=amber_resources(binary, np, ntomp).to_k8s(),
         use_gpu=use_gpu,
+        engine="amber",
+        owner=owner,
+        owner_namespace=owner_namespace,
         sim_env=[
             {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
             {"name": "TZ", "value": "UTC"},
@@ -486,6 +518,28 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
         return True
     except ApiException:
         return False
+
+
+def get_pod_times(ns: str, name: str) -> tuple[datetime | None, datetime | None]:
+    """
+    Allocation window of a job's pod: kubelet acceptance until its last container exits.
+
+    Returns:
+        ``(start, end)``; ``end`` is None while any container runs, both are None without a readable pod.
+    """
+    try:
+        pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
+    except ApiException:
+        return None, None
+    if not pods.items:
+        return None, None
+
+    status = pods.items[0].status
+    containers = status.container_statuses or []
+    exits = [c.state.terminated.finished_at for c in containers if c.state and c.state.terminated]
+    if containers and len(exits) == len(containers) and all(exits):
+        return status.start_time, max(exits)
+    return status.start_time, None
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:

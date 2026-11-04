@@ -10,6 +10,8 @@ from sanitization import (
     sanitize_bucket_name,
     sanitize_experiment_id,
     sanitize_extra_args,
+    sanitize_owner,
+    sanitize_owner_namespace,
     sanitize_tpr_name,
 )
 
@@ -187,3 +189,34 @@ def test_sanitize_extra_args_allows_empty() -> None:
     """Empty or whitespace-only extra_args should be accepted as empty string."""
     assert not sanitize_extra_args("", "gmx")
     assert not sanitize_extra_args("   ", "amber")
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_missing_owner_fields_are_unattributed(value: str | None) -> None:
+    """Old clients send no owner; blank values must not break job submission."""
+    assert sanitize_owner(value) is None
+    assert sanitize_owner_namespace(value) is None
+
+
+@pytest.mark.parametrize("owner", ["has space", "tab\tchar", "nul\x00byte", "x" * 256])
+def test_sanitize_owner_rejects_bad_values(owner: str) -> None:
+    """Reject whitespace, control characters, and values longer than the column."""
+    with pytest.raises(ValidationError):
+        sanitize_owner(owner)
+
+
+def test_sanitize_owner_accepts_federated_username() -> None:
+    """EGI-style usernames contain characters that labels cannot hold, so they go to an annotation."""
+    assert sanitize_owner("a1b2c3@egi.eu") == "a1b2c3@egi.eu"
+
+
+@pytest.mark.parametrize("namespace", ["Upper-ns", "under_score", "-leading", "trailing-", "dots.in.name", "x" * 64])
+def test_sanitize_owner_namespace_rejects_non_label_values(namespace: str) -> None:
+    """The namespace becomes a label value, so it must be a DNS-1123 label."""
+    with pytest.raises(ValidationError):
+        sanitize_owner_namespace(namespace)
+
+
+def test_sanitize_owner_namespace_accepts_user_namespace() -> None:
+    """Allow the user namespace the pre-spawn hook creates."""
+    assert sanitize_owner_namespace("mddash-user-alice-ns") == "mddash-user-alice-ns"

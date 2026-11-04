@@ -36,3 +36,4 @@ docker push <image>:latest
 - `PVC_NAME`: Persistent volume claim name (default: `mdrun-api-pvc`)
 - `S3_CREDENTIALS`: S3 access credentials
 - `S3_ENDPOINT`: S3 endpoint URL
+- `COST_CPU_CORE_HOUR`, `COST_GPU_HOUR`, `COST_GB_RAM_HOUR`: Hourly rates for usage cost estimates (optional; the report leaves cost blank without them)

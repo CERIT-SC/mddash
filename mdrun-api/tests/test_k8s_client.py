@@ -6,6 +6,7 @@ Verifies that simulations run in the directory of their primary input file
 storage is scoped to that simulation directory instead of the whole experiment.
 """
 
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -442,3 +443,152 @@ class TestGetJobStatus:
         _stub_status(mocker, pod_error=ApiException(status=500))
 
         assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.RUNNING
+
+
+class TestSimulationResources:
+    """Requests equal limits; the ledger records the same numbers."""
+
+    def test_gpu_gromacs_job_requests(self, mocker: MockerFixture) -> None:
+        mocker.patch.object(k8s_client, "GPU_TYPE", "nvidia.com/gpu")
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="md",
+            np=2,
+            ntomp=8,
+            nb="gpu",
+            pme="cpu",
+            extra_args="",
+        )
+
+        quantities = {"cpu": "16", "memory": "8Gi", "nvidia.com/gpu": "1"}
+        resources = _manifest(batch_v1)["spec"]["template"]["spec"]["containers"][0]["resources"]
+        assert resources == {"requests": quantities, "limits": quantities}
+
+    def test_mpi_amber_job_requests(self, mocker: MockerFixture) -> None:
+        mocker.patch.object(k8s_client, "GPU_TYPE", "nvidia.com/gpu")
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="sys.prmtop",
+            inpcrd_name="sys.rst7",
+            mdin_name="prod.in",
+            binary="pmemd.MPI",
+            np=4,
+            ntomp=2,
+            ewald="default",
+            extra_args="",
+        )
+
+        quantities = {"cpu": "8", "memory": "16Gi", "nvidia.com/gpu": "0"}
+        resources = _manifest(batch_v1)["spec"]["template"]["spec"]["containers"][0]["resources"]
+        assert resources == {"requests": quantities, "limits": quantities}
+
+
+class TestOwnerMetadata:
+    """Job and pod carry the owner so operators can see whose pods hold resources."""
+
+    def test_owner_labels_the_job_and_its_pod(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="md",
+            np=1,
+            ntomp=2,
+            nb="cpu",
+            pme="cpu",
+            extra_args="",
+            owner="alice@example.org",
+            owner_namespace="mddash-user-alice-ns",
+        )
+
+        manifest = _manifest(batch_v1)
+        job_meta, pod_meta = manifest["metadata"], manifest["spec"]["template"]["metadata"]
+        owner_labels = {
+            "mddash.io/workload": "mdrun",
+            "mddash.io/engine": "gmx",
+            "mddash.io/user-namespace": "mddash-user-alice-ns",
+        }
+        assert job_meta["labels"] == {"app": "mdrun-job", **owner_labels}
+        assert pod_meta["labels"] == {"job": "mdrun-job", **owner_labels}
+        assert job_meta["annotations"] == pod_meta["annotations"] == {"mddash.io/user": "alice@example.org"}
+
+    def test_unattributed_job_has_no_user_metadata(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="sys.prmtop",
+            inpcrd_name="sys.rst7",
+            mdin_name="prod.in",
+            binary="pmemd.cuda",
+            np=1,
+            ntomp=4,
+            ewald="default",
+            extra_args="",
+        )
+
+        pod_meta = _manifest(batch_v1)["spec"]["template"]["metadata"]
+        assert pod_meta["labels"] == {"job": "mdrun-job", "mddash.io/workload": "mdrun", "mddash.io/engine": "amber"}
+        assert "annotations" not in pod_meta
+
+
+POD_START = datetime(2026, 10, 1, 8, 0, tzinfo=UTC)
+
+
+def _pod(*finished_at: datetime | None) -> MagicMock:
+    pod = MagicMock()
+    pod.status.start_time = POD_START
+    statuses = []
+    for finished in finished_at:
+        container = MagicMock()
+        container.state.terminated = None if finished is None else MagicMock(finished_at=finished)
+        statuses.append(container)
+    pod.status.container_statuses = statuses
+    return pod
+
+
+class TestGetPodTimes:
+    """The allocation window is the pod's start until its last container exits."""
+
+    def test_window_ends_when_the_last_container_exits(self, mocker: MockerFixture) -> None:
+        core_v1 = mocker.patch.object(k8s_client, "core_v1")
+        sim_end = datetime(2026, 10, 1, 10, 0, tzinfo=UTC)
+        sync_end = datetime(2026, 10, 1, 10, 1, tzinfo=UTC)
+        core_v1.list_namespaced_pod.return_value = MagicMock(items=[_pod(sim_end, sync_end)])
+
+        assert k8s_client.get_pod_times(ns="ns", name="mdrun-job") == (POD_START, sync_end)
+        assert core_v1.list_namespaced_pod.call_args.kwargs["label_selector"] == "job-name=mdrun-job"
+
+    def test_window_stays_open_while_a_container_runs(self, mocker: MockerFixture) -> None:
+        core_v1 = mocker.patch.object(k8s_client, "core_v1")
+        core_v1.list_namespaced_pod.return_value = MagicMock(items=[_pod(datetime(2026, 10, 1, 10, tzinfo=UTC), None)])
+
+        assert k8s_client.get_pod_times(ns="ns", name="mdrun-job") == (POD_START, None)
+
+    def test_missing_pod_has_no_times(self, mocker: MockerFixture) -> None:
+        core_v1 = mocker.patch.object(k8s_client, "core_v1")
+        core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
+
+        assert k8s_client.get_pod_times(ns="ns", name="mdrun-job") == (None, None)
+
+    def test_api_error_has_no_times(self, mocker: MockerFixture) -> None:
+        core_v1 = mocker.patch.object(k8s_client, "core_v1")
+        core_v1.list_namespaced_pod.side_effect = ApiException(status=500)
+
+        assert k8s_client.get_pod_times(ns="ns", name="mdrun-job") == (None, None)
