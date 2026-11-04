@@ -26,7 +26,7 @@
       "id": 1,
       "type": "table",
       "title": "Usage in the selected range",
-      "description": "Same basis as `make usage`, which stays the exact record. Jobs whose finish MDRun noticed after a range boundary are off by at most the poll interval. A range that starts before Prometheus' first sample counts each user's usage since the ledger began.",
+      "description": "Same basis as `make usage`, which stays the exact record. Jobs whose finish MDRun noticed after a range boundary are off by at most the poll interval. A range that starts before Prometheus' first sample counts each user's usage since the ledger began. CPU used % and GPU busy % cover jobs that measured themselves and ended in the range.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -81,6 +81,28 @@
           "instant": true,
           "range": false,
           "format": "table"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(100 * ((sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used) - sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used)) / (((sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated) - sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated)) > 0), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(100 * ((sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy) - sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy)) / (((sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated) - sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated)) > 0), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
         }
       ],
       "transformations": [
@@ -100,7 +122,9 @@
               "Value #A": 2,
               "Value #B": 3,
               "Value #C": 4,
-              "Value #D": 5
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7
             },
             "renameByName": {
               "user": "User",
@@ -108,7 +132,9 @@
               "Value #A": "Jobs",
               "Value #B": "CPU core-h",
               "Value #C": "GPU-h",
-              "Value #D": "Memory GiB-h"
+              "Value #D": "Memory GiB-h",
+              "Value #E": "CPU used %",
+              "Value #F": "GPU busy %"
             }
           }
         }
@@ -122,6 +148,30 @@
             "matcher": {
               "id": "byName",
               "options": "Jobs"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU used %"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU busy %"
             },
             "properties": [
               {

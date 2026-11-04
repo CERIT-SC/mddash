@@ -81,7 +81,7 @@ make lint-workflows  # when editing GitHub Actions workflows (requires actionlin
 
 - Dashboard API route or schema changes: `make openapi` regenerates `dashboard/api/openapi.yaml` and the UI client from the FastAPI app (the API contract test and the UI `generated:check` fail on drift).
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.
-- Per-user MDRun usage: `make usage ENV=prod [SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD CSV=1]`, or the Grafana dashboard through `make grafana ENV=…` when `monitoring.enabled` (see `docs/resource-management.md`).
+- Per-user MDRun usage: `make usage ENV=prod [SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD JOBS=1 CSV=1]`, or the Grafana dashboard through `make grafana ENV=…` when `monitoring.enabled` (see `docs/resource-management.md`).
 - Production application releases use `make release VERSION=x.y.z`, which creates the SemVer tag and lets `release.yml` deploy prod and create the GitHub Release. `make all ENV=prod` is rejected. Operators only need `ENV=prod` for `status`/`logs`/`history`/`rollback`.
 - Helm: `make -C helm render` (render values), `make -C helm update` (update deps).
 

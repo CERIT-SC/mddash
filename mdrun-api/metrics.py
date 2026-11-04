@@ -4,6 +4,7 @@ Prometheus metrics computed from the usage ledger at scrape time, served by the 
 Cumulative usage is a gauge, not a counter: a window closes at the container's exit, which the poller can notice
 after a scrape already counted the job as running, so the total can step back. Usage over a period is the gauge's
 value at the end minus its value at the start, which matches ``python -m usage`` for the same period.
+Measured usage counts when a job ends, against its whole window, as in the report's efficiency.
 """
 
 import logging
@@ -18,12 +19,12 @@ from prometheus_client import CollectorRegistry, start_http_server
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
 from sqlalchemy import select
-from usage import allocated_seconds
+from sqlalchemy.orm import selectinload
+from usage import EPOCH, allocated_seconds, measured_seconds
 
 logger = logging.getLogger(__name__)
 
 LABELS = ("user", "namespace", "engine")
-EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 @dataclass
@@ -37,9 +38,15 @@ class _Usage:
     allocated_cpu_cores: int = 0
     allocated_gpus: int = 0
     allocated_memory_gib: int = 0
+    measured_jobs: int = 0
+    measured_cpu_core_seconds_used: float = 0.0
+    measured_cpu_core_seconds_allocated: float = 0.0
+    measured_gpu_seconds_busy: float = 0.0
+    measured_gpu_seconds_allocated: float = 0.0
 
 
 _CUMULATIVE = "running jobs count up to now; take differences over time, never rate() or increase()"
+_MEASURED = "jobs that measured themselves, counted when they end; take differences over time"
 _HELP = {
     "jobs_started": "MDRun jobs that have held resources.",
     "cpu_core_seconds": f"Allocated MDRun CPU core-seconds; {_CUMULATIVE}.",
@@ -48,6 +55,11 @@ _HELP = {
     "allocated_cpu_cores": "CPU cores held by running MDRun jobs.",
     "allocated_gpus": "GPUs held by running MDRun jobs.",
     "allocated_memory_gib": "Memory GiB held by running MDRun jobs.",
+    "measured_jobs": f"MDRun {_MEASURED}.",
+    "measured_cpu_core_seconds_used": f"CPU core-seconds used by MDRun {_MEASURED}.",
+    "measured_cpu_core_seconds_allocated": f"CPU core-seconds allocated to MDRun {_MEASURED}.",
+    "measured_gpu_seconds_busy": f"GPU-seconds the GPUs of MDRun {_MEASURED} were busy.",
+    "measured_gpu_seconds_allocated": f"GPU-seconds allocated to MDRun {_MEASURED}.",
 }
 
 
@@ -69,7 +81,7 @@ class LedgerCollector(Collector):
         now = self._now()
         totals: dict[tuple[str, str, str], _Usage] = {}
         with self._app.app_context():
-            for record in db.session.scalars(select(MdrunUsage)):
+            for record in db.session.scalars(select(MdrunUsage).options(selectinload(MdrunUsage.measurement))):
                 usage = totals.setdefault((record.owner or "", record.owner_namespace or "", record.engine), _Usage())
                 if seconds := allocated_seconds(record, since=EPOCH, until=now, now=now):
                     usage.jobs_started += 1
@@ -80,6 +92,12 @@ class LedgerCollector(Collector):
                     usage.allocated_cpu_cores += record.cpu_cores
                     usage.allocated_gpus += record.gpus
                     usage.allocated_memory_gib += record.memory_gib
+                if measured := measured_seconds(record, now):
+                    usage.measured_jobs += 1
+                    usage.measured_cpu_core_seconds_used += measured.cpu_core_seconds_used
+                    usage.measured_cpu_core_seconds_allocated += measured.cpu_core_seconds_allocated
+                    usage.measured_gpu_seconds_busy += measured.gpu_seconds_busy
+                    usage.measured_gpu_seconds_allocated += measured.gpu_seconds_allocated
 
         for field in fields(_Usage):
             family = GaugeMetricFamily(f"mddash_mdrun_{field.name}", _HELP[field.name], labels=LABELS)

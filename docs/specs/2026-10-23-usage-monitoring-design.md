@@ -11,7 +11,7 @@ Today nothing can answer "who used what". MDRun and Tuner jobs run in the hub na
 The services therefore record usage themselves, and Grafana reads it:
 
 1. **Usage ledger (MDRun).** An append-only `mdrun_usage` table records owner, requested resources, and allocation start/end per job, and is never deleted. `make usage` prints per-user CPU-hours, GPU-hours, and estimated cost for any period.
-2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived totals on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`.
+2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived totals on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`. MDRun jobs also measure how much of their allocation they used.
 3. **Tuner ledger**, with the same shape per trial.
 4. **User namespaces** (notebooks, GPU notebooks, analysis) via a collector of our own, because phase 0 found CERIT's `project-stats` exporter unusable without extra RBAC.
 
@@ -83,6 +83,7 @@ G3 ships in phase 1 regardless, and G1 builds on it in phase 2. G2 serves only a
   - `stop()`/`DELETE` close at request time;
   - a job that disappears from Kubernetes while non-terminal closes when first seen missing (error ≤ one poll interval).
 - Usage is requested CPU cores, memory GiB, and GPUs × window. Reports clip windows to the requested period, so a job that spans two months splits correctly.
+- Measured usage (phase 2b) shows how much of an allocation a job used. It never replaces allocation in cost.
 - Cost is usage × the `tuner.api.pricing` rates, shown as an estimate.
 - Jobs created before the deploy have no ledger row, and the write points skip them. There is no backfill.
 
@@ -136,6 +137,17 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
   - jobs started by engine.
 - `make usage` keeps exact long-range accounting. Grafana ranges are bounded by Prometheus retention.
 
+### Measured usage (phase 2b)
+
+The platform gives tenants no utilization source (phase 0), so MDRun jobs measure themselves:
+
+- The simulation container's script reads its own cgroup v2 counters (`cpu.stat` `usage_usec` and `memory.peak`). Only GPU jobs also sample `nvidia-smi` for utilization and memory used, because a CPU job on a GPU node may see GPUs that belong to other jobs.
+- It logs a `mddash-usage` line every 60 s and a final one from the exit trap, which also runs after a stop. Every measuring command tolerates failure, and the exit trap still writes the S3 completion marker when measuring fails.
+- When MDRun closes the window (finish, error, stop, `DELETE`), it reads the last line from the simulation container's log before deleting the Job and stores it in `mdrun_usage_measured` (one row per job, never deleted). The hub's role already grants `pods/log`. A stop or `DELETE` removes the pod before its exit line, so those jobs keep the last periodic line, up to 60 s old.
+- Jobs started before this change, jobs that vanished, and logs without a line have no measurement. The values come from the job container, so like `owner` they are a client claim.
+- A job's measurement is weighed against its whole window and counts in the period where the job ended. `make usage` shows CPU used % and GPU busy % per user, and `JOBS=1` lists each job with its measurement, including peak memory and GPU memory.
+- The exporter adds cumulative gauges in the same terms (`mddash_mdrun_measured_jobs`, `mddash_mdrun_measured_cpu_core_seconds_used` and `_allocated`, `mddash_mdrun_measured_gpu_seconds_busy` and `_allocated`), and the dashboard table divides them over the range.
+
 ### Tuner (phase 3)
 
 - The submit form gains `owner` and `owner_namespace`. The job thread writes one `tuner_usage` row per trial (Alembic migration `003`), and job `DELETE` never removes these rows.
@@ -163,6 +175,7 @@ Ask CERIT about `pod-banking` first: if it already records per-namespace usage, 
 | 0. Platform spike (parallel, no code) | S | Check for `monitoring.coreos.com` CRDs. Install Personal Monitoring in `mddash-dev` and record which namespaces and GPU requests `project-stats` reports, then uninstall. Ask CERIT about reusing `project-stats` and about `pod-banking` data. | Findings recorded in this spec. Phase 4 go/no-go. |
 | 1. MDRun ledger + report | M | Owner fields (dashboard MDRun client, gmx submit/extend, amber submit, demo fakes). Schema and sanitization. Labels. `mdrun_usage` model and write points. Pod-time helper in `k8s_client`. Pricing env on mdrun-api. `usage` CLI and `make usage`. Docs (`mdrun-api/AGENTS.md`, root `AGENTS.md`). | Unit tests for each write point, window clipping, unattributed rows, and old-client payloads. On dev, run a short job: `make usage ENV=dev` shows it, and `kubectl get pods -l mddash.io/workload=mdrun` shows the labels. |
 | 2. Prometheus + Grafana | M | Exporter on the poller. NetworkPolicy. Subcharts behind `monitoring.enabled`. Dashboard JSON. `make grafana`. `resource_summary.py`. `docs/deployment.md`, `docs/resource-management.md`. | `make validate-charts`. On dev: Prometheus target up, and the dashboard matches `make usage` for the same range. |
+| 2b. Measured usage | M | Self-measurement in the GROMACS and AMBER scripts. `mdrun_usage_measured`, read from the job log at close. Report columns and `JOBS=1`. Measured gauges and dashboard columns. | Unit tests run the sampler in bash against fake cgroup files and a fake `nvidia-smi`. On dev, a finished CPU job and a finished GPU job show measured values in `make usage JOBS=1`. |
 | 3. Tuner ledger | S-M | Form fields, trial timing, migration, exporter, panels. | Unit and migration tests. `make -C tuner e2e ENV=dev` produces a job that appears in `make usage` and Grafana. |
 | 4. Namespace usage | S-M | Collector for per-namespace requests (and usage once RBAC allows), scrape config, panels. | A dev user namespace and the Tuner worker appear in Grafana. |
 
@@ -183,5 +196,5 @@ Every phase passes `make fix`, `make type-check`, `make knip`, `make test`, and 
 - User-facing usage views.
 - Alerting.
 - Log aggregation.
-- Measured utilization (cAdvisor, DCGM).
+- Cluster-level measured utilization (cAdvisor, DCGM). MDRun jobs measure themselves instead.
 - Backfilling historical jobs.

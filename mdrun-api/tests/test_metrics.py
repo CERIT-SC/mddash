@@ -6,7 +6,7 @@ import pytest
 from enums import UsageOutcome
 from flask import Flask
 from metrics import LedgerCollector, serve
-from models import MdrunUsage
+from models import MdrunUsage, MdrunUsageMeasurement
 from prometheus_client import CollectorRegistry
 from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
@@ -15,6 +15,13 @@ NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 ALICE_GMX = {"user": "alice@example.org", "namespace": "mddash-user-alice-ns", "engine": "gmx"}
 ALICE_AMBER = {**ALICE_GMX, "engine": "amber"}
 METRICS_PORT = 9100
+UNMEASURED = {
+    "mddash_mdrun_measured_jobs": 0,
+    "mddash_mdrun_measured_cpu_core_seconds_used": 0,
+    "mddash_mdrun_measured_cpu_core_seconds_allocated": 0,
+    "mddash_mdrun_measured_gpu_seconds_busy": 0,
+    "mddash_mdrun_measured_gpu_seconds_allocated": 0,
+}
 
 
 def _row(
@@ -29,6 +36,7 @@ def _row(
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     outcome: UsageOutcome | None = None,
+    measurement: MdrunUsageMeasurement | None = None,
 ) -> MdrunUsage:
     return MdrunUsage(
         job_id=job_id,
@@ -42,6 +50,7 @@ def _row(
         started_at=started_at,
         finished_at=finished_at,
         outcome=outcome,
+        measurement=measurement,
     )
 
 
@@ -97,6 +106,7 @@ class TestLedgerCollector:
             "mddash_mdrun_allocated_cpu_cores": 4,
             "mddash_mdrun_allocated_gpus": 0,
             "mddash_mdrun_allocated_memory_gib": 4,
+            **UNMEASURED,
         }
         assert _samples(registry, ALICE_AMBER) == {
             "mddash_mdrun_jobs_started": 1,
@@ -106,6 +116,41 @@ class TestLedgerCollector:
             "mddash_mdrun_allocated_cpu_cores": 0,
             "mddash_mdrun_allocated_gpus": 0,
             "mddash_mdrun_allocated_memory_gib": 0,
+            **UNMEASURED,
+        }
+
+    def test_measured_jobs_report_what_they_used(self, registry: CollectorRegistry, db_session: Session) -> None:
+        measured = MdrunUsageMeasurement(
+            job_id="measured",
+            cpu_core_seconds=28_800.0,
+            memory_peak_gib=3.0,
+            gpu_utilization=75.0,
+            gpu_memory_peak_gib=5.0,
+            complete=True,
+        )
+        db_session.add_all([
+            _row(
+                "measured",
+                cpu_cores=8,
+                gpus=1,
+                started_at=NOW - timedelta(hours=4),
+                finished_at=NOW - timedelta(hours=2),
+                outcome=UsageOutcome.FINISHED,
+                measurement=measured,
+            ),
+            _row("unmeasured", started_at=NOW - timedelta(hours=3), finished_at=NOW - timedelta(hours=2)),
+            _row("running", started_at=NOW - timedelta(hours=1)),
+        ])
+        db_session.commit()
+
+        samples = _samples(registry, ALICE_GMX)
+
+        assert {name: value for name, value in samples.items() if name.startswith("mddash_mdrun_measured_")} == {
+            "mddash_mdrun_measured_jobs": 1,
+            "mddash_mdrun_measured_cpu_core_seconds_used": 28_800,
+            "mddash_mdrun_measured_cpu_core_seconds_allocated": 57_600,  # 8 cores x 2 h
+            "mddash_mdrun_measured_gpu_seconds_busy": 5_400,  # 75 % of 2 h
+            "mddash_mdrun_measured_gpu_seconds_allocated": 7_200,
         }
 
     def test_jobs_that_never_held_resources_count_nothing(

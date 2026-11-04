@@ -298,9 +298,10 @@ resources: ## Show offline resource budget and recommended namespace quota value
 	@python3 scripts/resource_summary.py $(config)
 
 .PHONY: usage
-usage: ## Show per-user MDRun usage. Optional: SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD CSV=1
+usage: ## Show per-user MDRun usage. Optional: SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD JOBS=1 (per job) CSV=1
 	@kubectl -n "$(namespace)" exec deploy/mdrun-api -c mdrun-api -- \
-		python -m usage $(if $(SINCE),--since "$(SINCE)") $(if $(UNTIL),--until "$(UNTIL)") $(if $(CSV),--csv)
+		python -m usage $(if $(SINCE),--since "$(SINCE)") $(if $(UNTIL),--until "$(UNTIL)") \
+		$(if $(JOBS),--jobs) $(if $(CSV),--csv)
 
 .PHONY: grafana
 grafana: ## Serve the usage dashboards on http://localhost:3000 (needs monitoring.enabled)

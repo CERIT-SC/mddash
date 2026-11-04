@@ -42,6 +42,11 @@ _POD_PHASE_STATUS = {
     "Succeeded": JobStatus.FINISHED,
     "Failed": JobStatus.ERROR,
 }
+# A stop deletes the pod before its exit line, so the stored measurement can trail by one interval.
+USAGE_INTERVAL_SECONDS = 60
+_USAGE_PREFIX = "mddash-usage "
+# Enough to reach back one interval past chatty simulation output.
+_USAGE_LOG_TAIL_LINES = 2000
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,17 @@ class JobResources:
         """Kubernetes requests and limits for the simulation container."""
         quantities = {"cpu": str(self.cpu), "memory": f"{self.memory_gib}Gi", GPU_TYPE: str(self.gpus)}
         return {"requests": quantities, "limits": dict(quantities)}
+
+
+@dataclass(frozen=True)
+class MeasuredUsage:
+    """What a simulation container used, as it measured itself; None where it could not measure."""
+
+    cpu_core_seconds: float | None
+    memory_peak_gib: float | None
+    gpu_utilization: float | None
+    gpu_memory_peak_gib: float | None
+    complete: bool
 
 
 def gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> JobResources:
@@ -140,13 +156,55 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
     )
 
 
+def _usage_block(gpus: bool, interval: float = USAGE_INTERVAL_SECONDS, cgroup: str = "/sys/fs/cgroup") -> str:
+    """
+    Self-measurement of the simulation container, logged as ``mddash-usage`` lines for MDRun to read.
+
+    CPU time and peak memory come from the container's own cgroup v2 counters. Only GPU jobs sample
+    ``nvidia-smi``: a CPU job on a GPU node may see GPUs that belong to other jobs. Every command
+    tolerates failure, so measuring can never stop the simulation.
+    """
+    lines = ["MDDASH_GPU_LOG=$(mktemp 2>/dev/null) || MDDASH_GPU_LOG=" if gpus else "MDDASH_GPU_LOG="]
+    if gpus:
+        lines += [
+            "mddash_gpu_sample() {",
+            "    timeout 10 nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits"
+            ' >> "$MDDASH_GPU_LOG" 2>/dev/null || true',
+            "}",
+        ]
+    lines += [
+        "mddash_usage() {",
+        "    local cpu mem gpu=''",
+        f"    cpu=$(awk '$1 == \"usage_usec\" {{print $2}}' {_q(f'{cgroup}/cpu.stat')} 2>/dev/null) || cpu=''",
+        f"    mem=$(cat {_q(f'{cgroup}/memory.peak')} 2>/dev/null) || mem=''",
+        '    if [ -s "$MDDASH_GPU_LOG" ]; then',
+        "        gpu=$(awk -F', *' '{n++; u += $1; if ($2 > m) m = $2} END "
+        '{printf " gpu_samples=%d gpu_util_sum=%d gpu_memory_peak_mib=%d", n, u, m}\' "$MDDASH_GPU_LOG")'
+        " || gpu=''",
+        "    fi",
+        f'    echo "{_USAGE_PREFIX}final=$1 cpu_usec=$cpu memory_peak_bytes=$mem$gpu"',
+        "}",
+        f"while sleep {interval} >/dev/null 2>&1; do",
+        *(["    mddash_gpu_sample"] if gpus else []),
+        "    mddash_usage 0",
+        "done &",
+        "MDDASH_SAMPLER=$!",
+        "mddash_usage_final() {",
+        '    kill "$MDDASH_SAMPLER" 2>/dev/null || true',
+        "    mddash_usage 1",
+        "}",
+    ]
+    return "\n".join(lines)
+
+
 def _sim_guard_block(sim_process: str) -> str:
     """
     Guard for the backgrounded sim.
 
     TERM goes to the sim process by name (an MPI launcher kills ranks on TERM
-    before mdrun checkpoints); $MD_PID is the fallback. Marker on every exit
-    path triggers the s3-sync sidecar's final copy.
+    before mdrun checkpoints); $MD_PID is the fallback. Every exit path logs the
+    final usage line, then writes the marker that triggers the s3-sync sidecar's
+    final copy; under ``set -e`` a failing trap command would skip the rest.
     """
     return "\n".join([
         "MD_PID=$!",
@@ -157,7 +215,7 @@ def _sim_guard_block(sim_process: str) -> str:
         "    exit 0",
         "}",
         "trap on_term TERM INT",
-        "trap 'touch /data/job_completed' EXIT",
+        "trap 'mddash_usage_final || true; touch /data/job_completed' EXIT",
         'wait "$MD_PID"',
         "echo 'Simulation completed.'",
     ])
@@ -297,6 +355,7 @@ def _amber_command(
         command = "\n".join([
             "set -euo pipefail",
             patch_step,
+            _usage_block(gpus=True),
             " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect + " &",
             _sim_guard_block("pmemd.cuda"),
         ])
@@ -305,6 +364,7 @@ def _amber_command(
     command = "\n".join([
         "set -euo pipefail",
         patch_step,
+        _usage_block(gpus=False),
         " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect + " &",
         _sim_guard_block("pmemd.MPI"),
     ])
@@ -346,6 +406,7 @@ def create_gromacs_job(
 
     gromacs_command = "\n".join([
         "set -euo pipefail",
+        _usage_block(gpus=use_gpu),
         (
             " ".join([
                 "mpirun",
@@ -540,6 +601,49 @@ def get_pod_times(ns: str, name: str) -> tuple[datetime | None, datetime | None]
     if containers and len(exits) == len(containers) and all(exits):
         return status.start_time, max(exits)
     return status.start_time, None
+
+
+def _number(fields: dict[str, str], key: str) -> float | None:
+    try:
+        return float(fields[key])
+    except (KeyError, ValueError):
+        return None
+
+
+def parse_usage_line(line: str) -> MeasuredUsage | None:
+    """Read one ``mddash-usage`` log line from ``_usage_block``; None when it is not one or measured nothing."""
+    if not line.startswith(_USAGE_PREFIX):
+        return None
+    fields = {key: value for key, _, value in (field.partition("=") for field in line[len(_USAGE_PREFIX) :].split())}
+    cpu_usec = _number(fields, "cpu_usec")
+    memory_bytes = _number(fields, "memory_peak_bytes")
+    gpu_samples = _number(fields, "gpu_samples")
+    gpu_util_sum = _number(fields, "gpu_util_sum")
+    gpu_memory_mib = _number(fields, "gpu_memory_peak_mib")
+    gpu = bool(gpu_samples) and gpu_util_sum is not None
+    if cpu_usec is None and memory_bytes is None and not gpu:
+        return None
+    return MeasuredUsage(
+        cpu_core_seconds=None if cpu_usec is None else cpu_usec / 1_000_000,
+        memory_peak_gib=None if memory_bytes is None else memory_bytes / 2**30,
+        gpu_utilization=gpu_util_sum / gpu_samples if gpu and gpu_samples and gpu_util_sum is not None else None,
+        gpu_memory_peak_gib=gpu_memory_mib / 1024 if gpu and gpu_memory_mib is not None else None,
+        complete=fields.get("final") == "1",
+    )
+
+
+def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
+    """Read the latest measurement the job's simulation container logged; None without a pod or a readable line."""
+    try:
+        pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
+        if not pods.items:
+            return None
+        log = core_v1.read_namespaced_pod_log(
+            name=pods.items[0].metadata.name, namespace=ns, container=name, tail_lines=_USAGE_LOG_TAIL_LINES
+        )
+    except ApiException:
+        return None
+    return next((usage for line in reversed(log.splitlines()) if (usage := parse_usage_line(line))), None)
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:

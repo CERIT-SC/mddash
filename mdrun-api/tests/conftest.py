@@ -81,6 +81,7 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:
         patch("k8s_client.create_amber_job") as mock_create_amber,
         patch("k8s_client.delete_job") as mock_delete,
         patch("k8s_client.get_job_status") as mock_status,
+        patch("k8s_client.get_measured_usage", return_value=None),
     ):
         mock_create.return_value = None
         mock_create_amber.return_value = None
