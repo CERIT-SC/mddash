@@ -186,6 +186,17 @@ jupyterhub:
         c.GenericOAuthenticator.client_secret = os.environ.get("OAUTH_CLIENT_SECRET")
       customTemplates: |
         c.JupyterHub.template_paths = ["/opt/jupyterhub/custom-templates"]
+{{- if $monEnabled }}
+
+    # Prometheus scrapes /hub/metrics with this service's token, which z2jh generates
+    # and keeps in the hub Secret under hub.services.prometheus.apiToken.
+    services:
+      prometheus: {}
+    loadRoles:
+      prometheus-metrics:
+        services: [prometheus]
+        scopes: ["read:metrics"]
+{{- end }}
 
     networkPolicy:
       enabled: false
@@ -484,6 +495,19 @@ prometheus:
     # Every hub-namespace service account holds the hub's project role. Prometheus needs no API access.
     automountServiceAccountToken: false
     retention: "{{ $mon.prometheus.retention }}"
+    # Only the hub's metrics token: the hub Secret also holds its cookie secret and crypt keys.
+    extraVolumes:
+      - name: hub-metrics-token
+        secret:
+          secretName: hub
+          optional: true
+          items:
+            - key: hub.services.prometheus.apiToken
+              path: token
+    extraVolumeMounts:
+      - name: hub-metrics-token
+        mountPath: /etc/hub-metrics
+        readOnly: true
     persistentVolume:
       size: "{{ $mon.prometheus.storage.size }}"
       storageClass: "{{ $mon.prometheus.storage.storageClassName }}"
@@ -514,6 +538,12 @@ prometheus:
     mdrun-api:
       static_configs:
         - targets: ["mdrun-api:9100"]
+    jupyterhub:
+      metrics_path: /hub/metrics
+      authorization:
+        credentials_file: /etc/hub-metrics/token
+      static_configs:
+        - targets: ["hub:8081"]
 {{- end }}
 
 grafana:

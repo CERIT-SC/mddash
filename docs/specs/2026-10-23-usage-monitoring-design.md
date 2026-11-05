@@ -136,6 +136,8 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
   - GPUs and CPU cores held over time, stacked by user;
   - jobs started by engine.
 - `make usage` keeps exact long-range accounting. Grafana ranges are bounded by Prometheus retention.
+- Prometheus also scrapes the hub's `/hub/metrics`. A JupyterHub service `prometheus` holds the `read:metrics` scope, and z2jh generates its token and keeps it in the hub Secret. The Prometheus pod projects only that key, because the Secret also holds the hub's cookie secret and crypt keys. The hub has no NetworkPolicy, and the monitoring policies restrict ingress only.
+- A "Platform" dashboard shows active users (24 h, 7 d, 30 d), running servers, spawn time and outcomes, and hub API latency and server errors. These series carry no usernames.
 
 ### Measured usage (phase 2b)
 
