@@ -638,11 +638,20 @@ def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
         pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
         if not pods.items:
             return None
-        log = core_v1.read_namespaced_pod_log(
-            name=pods.items[0].metadata.name, namespace=ns, container=name, tail_lines=_USAGE_LOG_TAIL_LINES
+        # Raw bytes: kubernetes 36 returns a preloaded text/plain body as the repr of its bytes.
+        response = core_v1.read_namespaced_pod_log(
+            name=pods.items[0].metadata.name,
+            namespace=ns,
+            container=name,
+            tail_lines=_USAGE_LOG_TAIL_LINES,
+            _preload_content=False,
         )
     except ApiException:
         return None
+    try:
+        log = response.data.decode("utf-8", errors="replace")
+    finally:
+        response.release_conn()
     return next((usage for line in reversed(log.splitlines()) if (usage := parse_usage_line(line))), None)
 
 

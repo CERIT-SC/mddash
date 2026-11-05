@@ -705,7 +705,13 @@ def _usage_log(*lines: str) -> MagicMock:
     pod = MagicMock()
     pod.metadata.name = "mdrun-job-abcde"
     core_v1.list_namespaced_pod.return_value = MagicMock(items=[pod])
-    core_v1.read_namespaced_pod_log.return_value = "\n".join(lines)
+    body = "\n".join(lines).encode()
+
+    def read_log(**kwargs: Any) -> object:
+        # kubernetes 36 returns a preloaded text/plain body as the repr of its bytes: "b'...\\n...'".
+        return MagicMock(data=body) if kwargs.get("_preload_content") is False else str(body)
+
+    core_v1.read_namespaced_pod_log.side_effect = read_log
     return core_v1
 
 
@@ -742,6 +748,11 @@ class TestGetMeasuredUsage:
     def test_missing_pod(self, mocker: MockerFixture) -> None:
         core_v1 = mocker.patch.object(k8s_client, "core_v1")
         core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
+
+        assert k8s_client.get_measured_usage(ns="ns", name="mdrun-job") is None
+
+    def test_empty_log(self, mocker: MockerFixture) -> None:
+        mocker.patch.object(k8s_client, "core_v1", _usage_log())
 
         assert k8s_client.get_measured_usage(ns="ns", name="mdrun-job") is None
 
