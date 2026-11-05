@@ -1,0 +1,509 @@
+{
+  "uid": "mddash-usage",
+  "title": "Usage by user",
+  "description": "MDRun allocation per user: requested resources x pod lifetime, from the MDRun usage ledger.",
+  "tags": [
+    "mddash"
+  ],
+  "editable": false,
+  "graphTooltip": 1,
+  "timezone": "utc",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "version": 1,
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Usage in the selected range",
+      "description": "Same basis as `make usage`, which stays the exact record. Jobs whose finish MDRun noticed after a range boundary are off by at most the poll interval. A range that starts before Prometheus' first sample counts each user's usage since the ledger began. Avg wait covers jobs that started in the range. CPU used %, GPU busy %, CPU stall %, OOM kills, and GPU kWh cover jobs that measured themselves and ended in the range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_jobs_started) - sum by (user, namespace) (mddash_mdrun_jobs_started offset $__range)) or sum by (user, namespace) (mddash_mdrun_jobs_started), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_cpu_core_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_cpu_core_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_cpu_core_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_gpu_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_gpu_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_gpu_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "D",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_memory_gib_seconds) / 3600 - sum by (user, namespace) (mddash_mdrun_memory_gib_seconds offset $__range) / 3600) or sum by (user, namespace) (mddash_mdrun_memory_gib_seconds) / 3600, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "E",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(100 * ((sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used) - sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_used)) / (((sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated) - sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_cpu_core_seconds_allocated)) > 0), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "F",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(100 * ((sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy) - sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_busy)) / (((sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated) - sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_gpu_seconds_allocated)) > 0), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "G",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(((sum by (user, namespace) (mddash_mdrun_queue_wait_seconds) - sum by (user, namespace) (mddash_mdrun_queue_wait_seconds offset $__range)) or sum by (user, namespace) (mddash_mdrun_queue_wait_seconds)) / (((sum by (user, namespace) (mddash_mdrun_jobs_started) - sum by (user, namespace) (mddash_mdrun_jobs_started offset $__range)) or sum by (user, namespace) (mddash_mdrun_jobs_started)) > 0) / 60, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "H",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(100 * ((sum by (user, namespace) (mddash_mdrun_measured_cpu_stall_seconds) - sum by (user, namespace) (mddash_mdrun_measured_cpu_stall_seconds offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_cpu_stall_seconds)) / (((sum by (user, namespace) (mddash_mdrun_measured_container_seconds) - sum by (user, namespace) (mddash_mdrun_measured_container_seconds offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_container_seconds)) > 0), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "I",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_measured_oom_kills) - sum by (user, namespace) (mddash_mdrun_measured_oom_kills offset $__range)) or sum by (user, namespace) (mddash_mdrun_measured_oom_kills), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        },
+        {
+          "refId": "J",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace((sum by (user, namespace) (mddash_mdrun_measured_gpu_energy_joules) / 3600000 - sum by (user, namespace) (mddash_mdrun_measured_gpu_energy_joules offset $__range) / 3600000) or sum by (user, namespace) (mddash_mdrun_measured_gpu_energy_joules) / 3600000, \"user\", \"(unattributed)\", \"user\", \"\")",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "user": 0,
+              "namespace": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7,
+              "Value #G": 8,
+              "Value #H": 9,
+              "Value #I": 10,
+              "Value #J": 11
+            },
+            "renameByName": {
+              "user": "User",
+              "namespace": "Namespace",
+              "Value #A": "Jobs",
+              "Value #B": "CPU core-h",
+              "Value #C": "GPU-h",
+              "Value #D": "Memory GiB-h",
+              "Value #E": "CPU used %",
+              "Value #F": "GPU busy %",
+              "Value #G": "Avg wait min",
+              "Value #H": "CPU stall %",
+              "Value #I": "OOM kills",
+              "Value #J": "GPU kWh"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1,
+          "custom": {
+            "minWidth": 80
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Jobs"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU used %"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU busy %"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CPU stall %"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "OOM kills"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "GPU kWh"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "GPU-h",
+            "desc": true
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "GPUs held by running jobs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (user) (mddash_mdrun_allocated_gpus), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "legendFormat": "{{user}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "CPU cores held by running jobs",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (user) (mddash_mdrun_allocated_cpu_cores), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "legendFormat": "{{user}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Jobs waiting to start",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "label_replace(sum by (user) (mddash_mdrun_pending_jobs), \"user\", \"(unattributed)\", \"user\", \"\")",
+          "legendFormat": "{{user}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "fillOpacity": 40,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Jobs submitted to MDRun whose pod has not started, usually waiting for a free GPU node."
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Jobs started",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "interval": "1h",
+      "maxDataPoints": 60,
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clamp_min(sum by (engine) (mddash_mdrun_jobs_started) - sum by (engine) (mddash_mdrun_jobs_started offset $__interval), 0)",
+          "legendFormat": "{{engine}}",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "decimals": 0,
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ]
+}

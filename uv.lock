@@ -958,6 +958,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "kubernetes" },
     { name = "marshmallow-sqlalchemy" },
+    { name = "prometheus-client" },
 ]
 
 [package.dev-dependencies]
@@ -977,6 +978,7 @@ requires-dist = [
     { name = "gunicorn" },
     { name = "kubernetes" },
     { name = "marshmallow-sqlalchemy" },
+    { name = "prometheus-client" },
 ]
 
 [package.metadata.requires-dev]

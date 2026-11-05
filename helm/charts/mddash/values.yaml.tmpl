@@ -16,6 +16,9 @@
 {{- else -}}
 {{- $s3Endpoint = required "s3.endpoint must be set when s3.seaweedfs.enabled is false" $cfg.s3.endpoint -}}
 {{- end -}}
+{{- /* Configs predating the monitoring section keep it off. */ -}}
+{{- $mon := index $cfg "monitoring" | default dict -}}
+{{- $monEnabled := index $mon "enabled" | default false -}}
 jupyterhub:
   hub:
     resources:
@@ -183,6 +186,16 @@ jupyterhub:
         c.GenericOAuthenticator.client_secret = os.environ.get("OAUTH_CLIENT_SECRET")
       customTemplates: |
         c.JupyterHub.template_paths = ["/opt/jupyterhub/custom-templates"]
+{{- if $monEnabled }}
+
+    # Prometheus scrapes /hub/metrics with this service's token, which z2jh keeps in the hub Secret.
+    services:
+      prometheus: {}
+    loadRoles:
+      prometheus-metrics:
+        services: [prometheus]
+        scopes: ["read:metrics"]
+{{- end }}
 
     networkPolicy:
       enabled: false
@@ -301,6 +314,12 @@ mdrun-api:
   resources:
 {{ $cfg.mdrunApi.resources | toYAML | indent 4 }}
   replicaCount: 1
+  metrics:
+    enabled: {{ $monEnabled }}
+    prometheusPodLabels:
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/instance: {{ $helmPackage }}
+      app.kubernetes.io/component: server
   env:
     - name: S3_ACCESS_KEY
       valueFrom:
@@ -437,3 +456,155 @@ seaweedfs:
       allowPrivilegeEscalation: false
       capabilities: { drop: ["ALL"] }
       seccompProfile: { type: RuntimeDefault }
+
+prometheus:
+  enabled: {{ $monEnabled }}
+{{- if $monEnabled }}
+  # Server only, with static scrape targets: the hub may not hold cluster-scoped RBAC.
+  rbac:
+    create: false
+  serviceAccounts:
+    server:
+      create: false
+  alertmanager:
+    enabled: false
+  kube-state-metrics:
+    enabled: false
+  prometheus-node-exporter:
+    enabled: false
+  prometheus-pushgateway:
+    enabled: false
+  configmapReload:
+    prometheus:
+      # Keep in sync with PROMETHEUS_RELOADER in scripts/resource_summary.py.
+      resources:
+        requests:
+          cpu: "10m"
+          memory: "32Mi"
+        limits:
+          cpu: "100m"
+          memory: "64Mi"
+      containerSecurityContext:
+        allowPrivilegeEscalation: false
+        capabilities: { drop: ["ALL"] }
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
+  server:
+    fullnameOverride: prometheus
+    # Every hub-namespace service account holds the hub's project role. Prometheus needs no API access.
+    automountServiceAccountToken: false
+    retention: "{{ $mon.prometheus.retention }}"
+    # Only the hub's metrics token: the hub Secret also holds its cookie secret and crypt keys.
+    extraVolumes:
+      - name: hub-metrics-token
+        secret:
+          secretName: hub
+          optional: true
+          items:
+            - key: hub.services.prometheus.apiToken
+              path: token
+    extraVolumeMounts:
+      - name: hub-metrics-token
+        mountPath: /etc/hub-metrics
+        readOnly: true
+    persistentVolume:
+      size: "{{ $mon.prometheus.storage.size }}"
+      storageClass: "{{ $mon.prometheus.storage.storageClassName }}"
+    resources:
+{{ $mon.prometheus.resources | toYAML | indent 6 }}
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile: { type: RuntimeDefault }
+    containerSecurityContext:
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
+      runAsNonRoot: true
+      seccompProfile: { type: RuntimeDefault }
+  scrapeConfigs:
+    # The chart's discovery jobs list cluster objects, which the hub may not.
+    kubernetes-api-servers: { enabled: false }
+    kubernetes-nodes: { enabled: false }
+    kubernetes-nodes-cadvisor: { enabled: false }
+    kubernetes-service-endpoints: { enabled: false }
+    kubernetes-service-endpoints-slow: { enabled: false }
+    kubernetes-services: { enabled: false }
+    kubernetes-pods: { enabled: false }
+    kubernetes-pods-slow: { enabled: false }
+    prometheus-pushgateway: { enabled: false }
+    mdrun-api:
+      static_configs:
+        - targets: ["mdrun-api:9100"]
+    jupyterhub:
+      metrics_path: /hub/metrics
+      authorization:
+        credentials_file: /etc/hub-metrics/token
+      static_configs:
+        - targets: ["hub:8081"]
+{{- end }}
+
+grafana:
+  enabled: {{ $monEnabled }}
+{{- if $monEnabled }}
+  fullnameOverride: grafana
+  rbac:
+    create: false
+  serviceAccount:
+    create: false
+  # Every hub-namespace service account holds the hub's project role. Grafana needs no API access.
+  automountServiceAccountToken: false
+  testFramework:
+    enabled: false
+  # It chowns a PVC as root; the data dir here is an emptyDir.
+  initChownData:
+    enabled: false
+  resources:
+{{ $mon.grafana.resources | toYAML | indent 4 }}
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile: { type: RuntimeDefault }
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+      check_for_plugin_updates: false
+      reporting_enabled: false
+    # Reachable only through kubectl port-forward, so Kubernetes RBAC is the gate.
+    auth:
+      disable_login_form: true
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+    users:
+      # Opens Explore to viewers; provisioned dashboards still can't be saved.
+      viewers_can_edit: true
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          uid: prometheus
+          type: prometheus
+          access: proxy
+          url: http://prometheus
+          isDefault: true
+          editable: false
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: mddash
+          folder: MDDash
+          type: file
+          disableDeletion: true
+          allowUiUpdates: false
+          options:
+            path: /var/lib/grafana/dashboards/mddash
+  # Built from dashboards/*.json by templates/monitoring.yaml.
+  dashboardsConfigMaps:
+    mddash: grafana-dashboards
+{{- end }}

@@ -142,3 +142,7 @@ make -C helm install ENV=${ENV}
 # For updates:
 make deploy ENV=${ENV}
 ```
+
+## Usage monitoring
+
+`monitoring.enabled` in the config deploys Prometheus and Grafana into the hub namespace with the release. They add about 110m CPU and 420Mi memory to the hub requests (`make resources ENV=${ENV}`), so check the Rancher quota before enabling them. Grafana has no ingress, so Kubernetes RBAC on port-forward is the only gate: `make grafana ENV=${ENV}` forwards it to http://localhost:3000 and prints a link to each dashboard. See `docs/resource-management.md` for what the dashboard shows.

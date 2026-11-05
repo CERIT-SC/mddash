@@ -2,6 +2,7 @@ import logging
 import os
 import time
 
+import metrics
 from enums import JobStatus
 from flask import Flask
 from models import MdrunJob
@@ -35,4 +36,6 @@ def run(app: Flask, interval: int) -> None:
 if __name__ == "__main__":
     from app import app as flask_app
 
+    if metrics_port := os.getenv("METRICS_PORT"):
+        metrics.serve(flask_app, int(metrics_port))
     run(flask_app, int(os.getenv("POLL_INTERVAL_SECONDS", "900")))

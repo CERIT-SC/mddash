@@ -1,0 +1,28 @@
+{{- if .Values.metrics.enabled }}
+{{- if not .Values.metrics.prometheusPodLabels }}
+{{- fail "metrics.prometheusPodLabels is required when metrics.enabled: without it nothing may scrape the metrics port" }}
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mdrun-api
+  labels:
+    app: mdrun-api
+spec:
+  podSelector:
+    matchLabels:
+      app: mdrun-api
+  policyTypes:
+  - Ingress
+  ingress:
+  # The API stays open to every caller.
+  - ports:
+    - port: {{ .Values.service.targetPort }}
+  # Usage series carry usernames.
+  - from:
+    - podSelector:
+        matchLabels:
+          {{- toYaml .Values.metrics.prometheusPodLabels | nindent 10 }}
+    ports:
+    - port: {{ .Values.metrics.port }}
+{{- end }}

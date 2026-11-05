@@ -1,4 +1,5 @@
 import logging
+from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -7,7 +8,8 @@ from config import NAMESPACE
 from enums import JobStatus, UsageOutcome
 from extensions import db
 from sqlalchemy import update
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,36 @@ class MdrunUsage(db.Model):  # type: ignore
     started_at: Mapped[datetime | None] = mapped_column(db.DateTime)
     finished_at: Mapped[datetime | None] = mapped_column(db.DateTime)
     outcome: Mapped[UsageOutcome | None] = mapped_column(db.Enum(UsageOutcome))
+    # Load with selectinload when reading many records.
+    measurement: Mapped["MdrunUsageMeasurement | None"] = relationship()
+
+
+class MdrunUsageMeasurement(db.Model):  # type: ignore
+    """
+    A job's self-measurement, mirroring ``k8s_client.MeasuredUsage``; ``complete`` marks the container's exit line.
+
+    ``create_all`` never adds columns to an existing table: a new column needs ``ALTER TABLE`` where the table exists.
+    """
+
+    __tablename__ = "mdrun_usage_measured"
+
+    job_id: Mapped[str] = mapped_column(db.String(36), db.ForeignKey("mdrun_usage.job_id"), primary_key=True)
+    cpu_core_seconds: Mapped[float | None] = mapped_column()
+    memory_peak_gib: Mapped[float | None] = mapped_column()
+    gpu_utilization: Mapped[float | None] = mapped_column()
+    gpu_memory_peak_gib: Mapped[float | None] = mapped_column()
+    complete: Mapped[bool] = mapped_column(nullable=False)
+    container_started_at: Mapped[datetime | None] = mapped_column(db.DateTime)
+    measured_at: Mapped[datetime | None] = mapped_column(db.DateTime)
+    cpu_throttled_seconds: Mapped[float | None] = mapped_column()
+    cpu_stall_seconds: Mapped[float | None] = mapped_column()
+    memory_stall_seconds: Mapped[float | None] = mapped_column()
+    io_stall_seconds: Mapped[float | None] = mapped_column()
+    oom_kills: Mapped[int | None] = mapped_column()
+    io_read_bytes: Mapped[int | None] = mapped_column()
+    io_write_bytes: Mapped[int | None] = mapped_column()
+    gpu_power_watts: Mapped[float | None] = mapped_column()
+    ns_per_day: Mapped[float | None] = mapped_column()
 
 
 class MdrunJob(db.Model):  # type: ignore
@@ -143,7 +175,7 @@ class MdrunJob(db.Model):  # type: ignore
 
     def record_usage(self, outcome: UsageOutcome | None = None) -> None:
         """
-        Stamp the allocation window from the job's pod; an ``outcome`` also closes it.
+        Stamp the allocation window from the job's pod; an ``outcome`` also closes it and stores the measurement.
 
         Times the pod no longer reports fall back to now. Writes only fill unset fields and hit the database at
         once, so call this before deleting the Job: a concurrent status read that then finds the Job gone waits
@@ -153,13 +185,19 @@ class MdrunJob(db.Model):  # type: ignore
         if usage is None or usage.finished_at is not None:
             return
 
+        # Kubernetes first: the writes below hold SQLite's write lock until the caller commits.
         start, end = k8s_client.get_pod_times(ns=NAMESPACE, name=self.job_name)
+        measured = None if outcome is None else k8s_client.get_measured_usage(ns=NAMESPACE, name=self.job_name)
         now = datetime.now(UTC)
         window = update(MdrunUsage).where(MdrunUsage.job_id == self.id).execution_options(synchronize_session=False)
         db.session.execute(window.where(MdrunUsage.started_at.is_(None)).values(started_at=start or now))
         if outcome is not None:
             db.session.execute(
                 window.where(MdrunUsage.finished_at.is_(None)).values(finished_at=end or now, outcome=outcome)
+            )
+        if measured is not None:
+            db.session.execute(
+                insert(MdrunUsageMeasurement).values(job_id=self.id, **asdict(measured)).on_conflict_do_nothing()
             )
 
     def handle_status_change(self, old: JobStatus, new: JobStatus) -> None:
