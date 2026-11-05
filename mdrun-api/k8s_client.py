@@ -13,6 +13,7 @@ from config import AMBER_IMAGE, GMX_IMAGE, GPU_PRODUCT, GPU_TYPE, S3_ACCESS_KEY,
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
+from urllib3.exceptions import HTTPError
 
 if TYPE_CHECKING:
     from kubernetes.client import V1Job
@@ -48,6 +49,12 @@ USAGE_INTERVAL_SECONDS = 60
 _USAGE_PREFIX = "mddash-usage "
 # Enough to reach back one interval past chatty simulation output.
 _USAGE_LOG_TAIL_LINES = 2000
+# Stop, DELETE, and status reads wait on the log read.
+_USAGE_LOG_TIMEOUT_SECONDS = 10
+# Largest accepted field values: SQLite's INTEGER limit, and datetime's last second for timestamps.
+_MAX_USAGE_VALUE = 2**63 - 1
+_MAX_USAGE_EPOCH = 253_402_300_799
+_USAGE_TIMESTAMPS = frozenset({"started", "at"})
 
 
 @dataclass(frozen=True)
@@ -659,76 +666,79 @@ def get_pod_times(ns: str, name: str) -> tuple[datetime | None, datetime | None]
     return status.start_time, None
 
 
-def _number(fields: dict[str, str], key: str) -> float | None:
-    try:
-        value = float(fields[key])
-    except (KeyError, ValueError):
-        return None
-    return value if math.isfinite(value) else None
+def _numbers(line: str, job: str) -> dict[str, float]:
+    """Keep a usage line's fields that hold a number in range; warn about the rest, which only a bug or forgery writes."""
+    numbers: dict[str, float] = {}
+    rejected = []
+    for field in line[len(_USAGE_PREFIX) :].split():
+        key, _, text = field.partition("=")
+        try:
+            value = float(text)
+        except ValueError:
+            value = math.nan
+        if 0 <= value <= (_MAX_USAGE_EPOCH if key in _USAGE_TIMESTAMPS else _MAX_USAGE_VALUE):
+            numbers[key] = value
+        elif text:  # empty: the container could not measure it
+            rejected.append(field)
+    if rejected:
+        logger.warning("Ignoring malformed usage fields of %s: %s", job, " ".join(rejected))
+    return numbers
 
 
-def _count(fields: dict[str, str], key: str) -> int | None:
-    value = _number(fields, key)
+def _count(numbers: dict[str, float], key: str) -> int | None:
+    value = numbers.get(key)
     return None if value is None else int(value)
 
 
-def _seconds(fields: dict[str, str], key: str) -> float | None:
+def _seconds(numbers: dict[str, float], key: str) -> float | None:
     """Seconds from a microsecond counter."""
-    usec = _number(fields, key)
+    usec = numbers.get(key)
     return None if usec is None else usec / 1_000_000
 
 
-def _timestamp(fields: dict[str, str], key: str) -> datetime | None:
-    epoch = _number(fields, key)
-    if epoch is None:
-        return None
-    try:
-        return datetime.fromtimestamp(epoch, UTC)
-    except (OverflowError, OSError, ValueError):
-        return None
+def _timestamp(numbers: dict[str, float], key: str) -> datetime | None:
+    epoch = numbers.get(key)
+    return None if epoch is None else datetime.fromtimestamp(epoch, UTC)
 
 
 def _ratio(numerator: float | None, denominator: float | None) -> float | None:
     return numerator / denominator if numerator is not None and denominator else None
 
 
-def parse_usage_line(line: str) -> MeasuredUsage | None:
-    """Read one ``mddash-usage`` log line from ``_usage_block``; None when it is not one or measured nothing."""
+def parse_usage_line(line: str, job: str) -> MeasuredUsage | None:
+    """Read one ``mddash-usage`` line of ``job``'s log; None when it is not one or measured nothing."""
     if not line.startswith(_USAGE_PREFIX):
         return None
-    fields = {key: value for key, _, value in (field.partition("=") for field in line[len(_USAGE_PREFIX) :].split())}
-    cpu_usec = _number(fields, "cpu_usec")
-    memory_bytes = _number(fields, "memory_peak_bytes")
-    gpu_samples = _number(fields, "gpu_samples")
-    gpu_util_sum = _number(fields, "gpu_util_sum")
-    gpu_memory_mib = _number(fields, "gpu_memory_peak_mib")
+    numbers = _numbers(line, job)
+    memory_bytes = numbers.get("memory_peak_bytes")
+    gpu_samples = numbers.get("gpu_samples")
+    gpu_util_sum = numbers.get("gpu_util_sum")
+    gpu_memory_mib = numbers.get("gpu_memory_peak_mib")
     gpu = bool(gpu_samples) and gpu_util_sum is not None
-    if cpu_usec is None and memory_bytes is None and not gpu:
+    if "cpu_usec" not in numbers and memory_bytes is None and not gpu:
         return None
     return MeasuredUsage(
-        cpu_core_seconds=_seconds(fields, "cpu_usec"),
+        cpu_core_seconds=_seconds(numbers, "cpu_usec"),
         memory_peak_gib=None if memory_bytes is None else memory_bytes / 2**30,
         gpu_utilization=_ratio(gpu_util_sum, gpu_samples) if gpu else None,
         gpu_memory_peak_gib=gpu_memory_mib / 1024 if gpu and gpu_memory_mib is not None else None,
-        complete=fields.get("final") == "1",
-        container_started_at=_timestamp(fields, "started"),
-        measured_at=_timestamp(fields, "at"),
-        cpu_throttled_seconds=_seconds(fields, "cpu_throttled_usec"),
-        cpu_stall_seconds=_seconds(fields, "cpu_stall_usec"),
-        memory_stall_seconds=_seconds(fields, "memory_stall_usec"),
-        io_stall_seconds=_seconds(fields, "io_stall_usec"),
-        oom_kills=_count(fields, "oom_kills"),
-        io_read_bytes=_count(fields, "io_read_bytes"),
-        io_write_bytes=_count(fields, "io_write_bytes"),
-        gpu_power_watts=_ratio(_number(fields, "gpu_power_sum_w"), _number(fields, "gpu_power_samples"))
-        if gpu
-        else None,
-        ns_per_day=_number(fields, "ns_per_day"),
+        complete=numbers.get("final") == 1,
+        container_started_at=_timestamp(numbers, "started"),
+        measured_at=_timestamp(numbers, "at"),
+        cpu_throttled_seconds=_seconds(numbers, "cpu_throttled_usec"),
+        cpu_stall_seconds=_seconds(numbers, "cpu_stall_usec"),
+        memory_stall_seconds=_seconds(numbers, "memory_stall_usec"),
+        io_stall_seconds=_seconds(numbers, "io_stall_usec"),
+        oom_kills=_count(numbers, "oom_kills"),
+        io_read_bytes=_count(numbers, "io_read_bytes"),
+        io_write_bytes=_count(numbers, "io_write_bytes"),
+        gpu_power_watts=_ratio(numbers.get("gpu_power_sum_w"), numbers.get("gpu_power_samples")) if gpu else None,
+        ns_per_day=numbers.get("ns_per_day"),
     )
 
 
 def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
-    """Read the latest measurement the job's simulation container logged; None without a pod or a readable line."""
+    """Latest measurement the job's simulation container logged; None on any read failure, never an error."""
     try:
         pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
         if not pods.items:
@@ -740,14 +750,16 @@ def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
             container=name,
             tail_lines=_USAGE_LOG_TAIL_LINES,
             _preload_content=False,
+            _request_timeout=_USAGE_LOG_TIMEOUT_SECONDS,
         )
-    except ApiException:
+        try:
+            log = (response.data or b"").decode("utf-8", errors="replace")
+        finally:
+            response.release_conn()
+    except (ApiException, HTTPError):
         return None
-    try:
-        log = response.data.decode("utf-8", errors="replace")
-    finally:
-        response.release_conn()
-    return next((usage for line in reversed(log.splitlines()) if (usage := parse_usage_line(line))), None)
+    latest = next((line for line in reversed(log.splitlines()) if line.startswith(_USAGE_PREFIX)), None)
+    return None if latest is None else parse_usage_line(latest, name)
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:
