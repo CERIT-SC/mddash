@@ -19,8 +19,7 @@ gunicorn:
   threads: 4
 
 metrics:
-  # The poller serves per-user usage from the ledger. Series carry usernames, so a NetworkPolicy
-  # admits only pods matching prometheusPodLabels to this port.
+  # Per-user series from the poller; a NetworkPolicy admits only pods matching prometheusPodLabels.
   enabled: false
   port: 9100
   prometheusPodLabels: {}

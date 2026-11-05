@@ -66,12 +66,7 @@ class JobResources:
 
 @dataclass(frozen=True)
 class MeasuredUsage:
-    """
-    What a simulation container used, as it measured itself; None where it could not measure.
-
-    Stall times are pressure-stall "some" totals: time at least one task waited for the resource. The timestamps come
-    from the container's clock. ``ns_per_day`` is the engine's own end-of-run figure, so only exit lines carry it.
-    """
+    """What a simulation container measured of itself, by its own clock; None where it could not."""
 
     cpu_core_seconds: float | None
     memory_peak_gib: float | None
@@ -173,7 +168,7 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
     )
 
 
-# awk programs that print ``mddash-usage`` fields from cgroup v2 files, and nothing when a file is unreadable.
+# awk programs printing ``mddash-usage`` fields from cgroup v2 files; stalls are pressure-stall "some" totals.
 _CGROUP_FIELDS = {
     "cpu.stat": '$1 == "usage_usec" {printf " cpu_usec=%s", $2} '
     '$1 == "throttled_usec" {printf " cpu_throttled_usec=%s", $2}',
@@ -213,12 +208,9 @@ def _usage_block(
     gpus: bool, interval: float = USAGE_INTERVAL_SECONDS, cgroup: str = "/sys/fs/cgroup", performance: str = ""
 ) -> str:
     """
-    Self-measurement of the simulation container, logged as ``mddash-usage`` lines for MDRun to read.
+    Log the container's own counters as ``mddash-usage`` lines; every command tolerates failure.
 
-    Every line carries the container's clock and its own cgroup v2 counters: CPU time and throttling, peak memory,
-    OOM kills, pressure stall time, and disk bytes. Only GPU jobs sample ``nvidia-smi``: a CPU job on a GPU node may
-    see GPUs that belong to other jobs. ``performance`` prints the engine's speed for the exit line. Every command
-    tolerates failure, so measuring can never stop the simulation.
+    Only GPU jobs run ``nvidia-smi``: a CPU job on a GPU node may see other jobs' GPUs.
     """
     lines = [
         "MDDASH_STARTED=$(date +%s 2>/dev/null) || MDDASH_STARTED=''",
@@ -263,9 +255,8 @@ def _sim_guard_block(sim_process: str) -> str:
     Guard for the backgrounded sim.
 
     TERM goes to the sim process by name (an MPI launcher kills ranks on TERM
-    before mdrun checkpoints); $MD_PID is the fallback. Every exit path logs the
-    final usage line, then writes the marker that triggers the s3-sync sidecar's
-    final copy; under ``set -e`` a failing trap command would skip the rest.
+    before mdrun checkpoints); $MD_PID is the fallback. Marker on every exit
+    path triggers the s3-sync sidecar's final copy.
     """
     return "\n".join([
         "MD_PID=$!",
@@ -276,6 +267,7 @@ def _sim_guard_block(sim_process: str) -> str:
         "    exit 0",
         "}",
         "trap on_term TERM INT",
+        # Under set -e a failing trap command skips the rest, and s3-sync would wait for the marker in vain.
         "trap 'mddash_usage_final || true; touch /data/job_completed' EXIT",
         'wait "$MD_PID"',
         "echo 'Simulation completed.'",

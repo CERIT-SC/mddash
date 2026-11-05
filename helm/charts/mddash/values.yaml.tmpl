@@ -188,8 +188,7 @@ jupyterhub:
         c.JupyterHub.template_paths = ["/opt/jupyterhub/custom-templates"]
 {{- if $monEnabled }}
 
-    # Prometheus scrapes /hub/metrics with this service's token, which z2jh generates
-    # and keeps in the hub Secret under hub.services.prometheus.apiToken.
+    # Prometheus scrapes /hub/metrics with this service's token, which z2jh keeps in the hub Secret.
     services:
       prometheus: {}
     loadRoles:

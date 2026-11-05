@@ -491,7 +491,7 @@ def _record(
     """
     Build a ledger record; ``used`` is its measured (CPU core-seconds, GPU utilization %).
 
-    It was submitted at ``submitted``, by default when it started. ``diagnostics`` adds measured fields.
+    ``submitted`` defaults to the start; ``diagnostics`` adds measured fields.
     """
     job_id = f"{owner}-{start}"
     record = MdrunUsage(

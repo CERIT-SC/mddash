@@ -43,12 +43,9 @@ class MdrunUsage(db.Model):  # type: ignore
 
 class MdrunUsageMeasurement(db.Model):  # type: ignore
     """
-    What a job used, as its simulation container measured itself; rows are never deleted.
+    A job's self-measurement, mirroring ``k8s_client.MeasuredUsage``; ``complete`` marks the container's exit line.
 
-    ``complete`` marks the container's exit line. A stop or DELETE keeps the last periodic line, so its values
-    can trail the end of the window by ``k8s_client.USAGE_INTERVAL_SECONDS``. Columns mirror
-    ``k8s_client.MeasuredUsage``. ``create_all`` never adds columns to an existing table, so a new column
-    needs an ``ALTER TABLE`` wherever the table already exists.
+    ``create_all`` never adds columns to an existing table: a new column needs ``ALTER TABLE`` where the table exists.
     """
 
     __tablename__ = "mdrun_usage_measured"
@@ -182,8 +179,7 @@ class MdrunJob(db.Model):  # type: ignore
 
         Times the pod no longer reports fall back to now. Writes only fill unset fields and hit the database at
         once, so call this before deleting the Job: a concurrent status read that then finds the Job gone waits
-        on the write lock and leaves the closed window as it is. The deletion also takes the pod's log, which
-        holds the measurement.
+        on the write lock and leaves the closed window as it is.
         """
         usage = self.usage
         if usage is None or usage.finished_at is not None:

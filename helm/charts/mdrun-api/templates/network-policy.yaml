@@ -15,7 +15,7 @@ spec:
   policyTypes:
   - Ingress
   ingress:
-  # The API stays open to every caller, as before this policy.
+  # The API stays open to every caller.
   - ports:
     - port: {{ .Values.service.targetPort }}
   # Usage series carry usernames.

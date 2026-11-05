@@ -1,8 +1,7 @@
 """
 Per-user MDRun usage from the ledger: ``python -m usage [--since DATE] [--until DATE] [--jobs] [--csv]``.
 
-Usage is allocation: the CPU cores, memory, and GPUs a job requested, times how long its pod held them. Jobs whose
-container measured itself also show how much of that allocation they used.
+Usage is allocation: the CPU cores, memory, and GPUs a job requested, times how long its pod held them.
 """
 
 import argparse
@@ -239,8 +238,7 @@ def summarize(records: Iterable[MdrunUsage], since: datetime, until: datetime, n
     """
     Totals per owner, with each allocation window clipped to ``[since, until)``.
 
-    Open windows run until ``now``; jobs that never started count nothing. Queue wait covers jobs that started in
-    the period. Efficiency and diagnostics cover measured jobs that ended in the period, each over its whole window.
+    Open windows run until ``now``; jobs that never started count nothing.
 
     Returns:
         Owners by GPU-hours, then CPU core-hours, descending.

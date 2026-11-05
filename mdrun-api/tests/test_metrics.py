@@ -250,11 +250,7 @@ class TestLedgerCollector:
         assert unattributed["mddash_mdrun_cpu_core_seconds"] == 14_400  # 4 cores x 1 h
 
     def test_cumulative_usage_is_exported_as_gauges(self, registry: CollectorRegistry) -> None:
-        """
-        A window closes at the container's exit, which the poller can notice after a scrape counted the job as running.
-
-        The total then steps back, which Prometheus would read as a counter reset and count again.
-        """
+        """A late-noticed exit steps a total back, which Prometheus would read as a counter reset."""
         assert {family.type for family in registry.collect()} == {"gauge"}
 
 

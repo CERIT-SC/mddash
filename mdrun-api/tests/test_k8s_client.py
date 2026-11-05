@@ -616,12 +616,7 @@ def _pressure(total_usec: int) -> str:
 
 @pytest.fixture
 def cgroup(tmp_path: Path) -> Path:
-    """
-    Write the container's own cgroup v2 counters.
-
-    2 core-hours of CPU, 90 s throttled, 4 GiB peak memory, one OOM kill, 30 min waiting for CPU, 5 s for
-    memory, 30 s for I/O, and 2 GiB read and written across two devices.
-    """
+    """Write the container's own cgroup v2 counters, which ``CPU_JOB_USAGE`` reads back."""
     directory = tmp_path / "cgroup"
     directory.mkdir()
     (directory / "cpu.stat").write_text(CPU_STAT)

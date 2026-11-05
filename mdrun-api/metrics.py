@@ -1,11 +1,7 @@
 """
-Prometheus metrics computed from the usage ledger at scrape time, served by the poller on ``METRICS_PORT``.
+Ledger totals for Prometheus, computed at scrape time and served by the poller on ``METRICS_PORT``.
 
-Cumulative usage is a gauge, not a counter: a window closes at the container's exit, which the poller can notice
-after a scrape already counted the job as running, so the total can step back. Usage over a period is the gauge's
-value at the end minus its value at the start, which matches ``python -m usage`` for the same period.
-Measured usage counts when a job ends, against its whole window, as in the report's efficiency. Queue wait counts
-when a job starts, so its average over a period is the wait difference over the ``jobs_started`` difference.
+Cumulative usage is a gauge: a late-noticed exit can step a total back, so take ``x - x offset d``, not ``increase()``.
 """
 
 import logging
