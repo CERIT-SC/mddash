@@ -1,9 +1,10 @@
 import logging
+import math
 import os
 import re
 import shlex
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -65,13 +66,29 @@ class JobResources:
 
 @dataclass(frozen=True)
 class MeasuredUsage:
-    """What a simulation container used, as it measured itself; None where it could not measure."""
+    """
+    What a simulation container used, as it measured itself; None where it could not measure.
+
+    Stall times are pressure-stall "some" totals: time at least one task waited for the resource. The timestamps come
+    from the container's clock. ``ns_per_day`` is the engine's own end-of-run figure, so only exit lines carry it.
+    """
 
     cpu_core_seconds: float | None
     memory_peak_gib: float | None
     gpu_utilization: float | None
     gpu_memory_peak_gib: float | None
     complete: bool
+    container_started_at: datetime | None = None
+    measured_at: datetime | None = None
+    cpu_throttled_seconds: float | None = None
+    cpu_stall_seconds: float | None = None
+    memory_stall_seconds: float | None = None
+    io_stall_seconds: float | None = None
+    oom_kills: int | None = None
+    io_read_bytes: int | None = None
+    io_write_bytes: int | None = None
+    gpu_power_watts: float | None = None
+    ns_per_day: float | None = None
 
 
 def gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> JobResources:
@@ -156,33 +173,77 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
     )
 
 
-def _usage_block(gpus: bool, interval: float = USAGE_INTERVAL_SECONDS, cgroup: str = "/sys/fs/cgroup") -> str:
+# awk programs that print ``mddash-usage`` fields from cgroup v2 files, and nothing when a file is unreadable.
+_CGROUP_FIELDS = {
+    "cpu.stat": '$1 == "usage_usec" {printf " cpu_usec=%s", $2} '
+    '$1 == "throttled_usec" {printf " cpu_throttled_usec=%s", $2}',
+    "memory.peak": 'NR == 1 {printf " memory_peak_bytes=%s", $1}',
+    "memory.events": '$1 == "oom_kill" {printf " oom_kills=%s", $2}',
+    **{
+        f"{resource}.pressure": f'$1 == "some" {{for (i = 2; i <= NF; i++) '
+        f'if ($i ~ /^total=/) printf " {resource}_stall_usec=%s", substr($i, 7)}}'
+        for resource in ("cpu", "memory", "io")
+    },
+}
+_IO_STAT_FIELDS = (
+    '{for (i = 2; i <= NF; i++) {split($i, kv, "="); if (kv[1] == "rbytes") r += kv[2]; '
+    'else if (kv[1] == "wbytes") w += kv[2]}} END {printf " io_read_bytes=%.0f io_write_bytes=%.0f", r, w}'
+)
+_GPU_FIELDS = (
+    "{n++; u += $1; if ($2 > m) m = $2; if ($3 ~ /^[0-9.]+$/) {p += $3; pn++}} "
+    'END {printf " gpu_samples=%d gpu_util_sum=%d gpu_memory_peak_mib=%d", n, u, m; '
+    'if (pn) printf " gpu_power_sum_w=%.1f gpu_power_samples=%d", p, pn}'
+)
+
+
+def _gromacs_performance(log_name: str) -> str:
+    """Command printing the ns/day of mdrun's last end-of-run report; ``-cpi`` runs append theirs to the same log."""
+    return f'awk \'$1 == "Performance:" {{v = $2}} END {{if (v != "") printf " ns_per_day=%s", v}}\' {_q(log_name)}'
+
+
+def _amber_performance(mdout_name: str) -> str:
+    """Command printing pmemd's ns/day over all steps, the last figure in its timing summary."""
+    return (
+        'awk \'{for (i = 1; i < NF - 1; i++) if ($i == "ns/day" && $(i + 1) == "=") v = $(i + 2)} '
+        f'END {{if (v != "") printf " ns_per_day=%s", v}}\' {_q(mdout_name)}'
+    )
+
+
+def _usage_block(
+    gpus: bool, interval: float = USAGE_INTERVAL_SECONDS, cgroup: str = "/sys/fs/cgroup", performance: str = ""
+) -> str:
     """
     Self-measurement of the simulation container, logged as ``mddash-usage`` lines for MDRun to read.
 
-    CPU time and peak memory come from the container's own cgroup v2 counters. Only GPU jobs sample
-    ``nvidia-smi``: a CPU job on a GPU node may see GPUs that belong to other jobs. Every command
+    Every line carries the container's clock and its own cgroup v2 counters: CPU time and throttling, peak memory,
+    OOM kills, pressure stall time, and disk bytes. Only GPU jobs sample ``nvidia-smi``: a CPU job on a GPU node may
+    see GPUs that belong to other jobs. ``performance`` prints the engine's speed for the exit line. Every command
     tolerates failure, so measuring can never stop the simulation.
     """
-    lines = ["MDDASH_GPU_LOG=$(mktemp 2>/dev/null) || MDDASH_GPU_LOG=" if gpus else "MDDASH_GPU_LOG="]
+    lines = [
+        "MDDASH_STARTED=$(date +%s 2>/dev/null) || MDDASH_STARTED=''",
+        "MDDASH_GPU_LOG=$(mktemp 2>/dev/null) || MDDASH_GPU_LOG=" if gpus else "MDDASH_GPU_LOG=",
+    ]
     if gpus:
         lines += [
             "mddash_gpu_sample() {",
-            "    timeout 10 nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader,nounits"
+            "    timeout 10 nvidia-smi --query-gpu=utilization.gpu,memory.used,power.draw --format=csv,noheader,nounits"
             ' >> "$MDDASH_GPU_LOG" 2>/dev/null || true',
             "}",
         ]
+    io_stat = _q(f"{cgroup}/io.stat")
     lines += [
+        # Runs only inside $(...), where bash drops errexit, so an unreadable counter just prints nothing.
+        "mddash_counters() {",
+        *(f"    awk '{program}' {_q(f'{cgroup}/{name}')} 2>/dev/null" for name, program in _CGROUP_FIELDS.items()),
+        f"    if [ -r {io_stat} ]; then awk '{_IO_STAT_FIELDS}' {io_stat} 2>/dev/null; fi",
+        f"    if [ -s \"$MDDASH_GPU_LOG\" ]; then awk -F', *' '{_GPU_FIELDS}' \"$MDDASH_GPU_LOG\" 2>/dev/null; fi",
+        "    return 0",
+        "}",
         "mddash_usage() {",
-        "    local cpu mem gpu=''",
-        f"    cpu=$(awk '$1 == \"usage_usec\" {{print $2}}' {_q(f'{cgroup}/cpu.stat')} 2>/dev/null) || cpu=''",
-        f"    mem=$(cat {_q(f'{cgroup}/memory.peak')} 2>/dev/null) || mem=''",
-        '    if [ -s "$MDDASH_GPU_LOG" ]; then',
-        "        gpu=$(awk -F', *' '{n++; u += $1; if ($2 > m) m = $2} END "
-        '{printf " gpu_samples=%d gpu_util_sum=%d gpu_memory_peak_mib=%d", n, u, m}\' "$MDDASH_GPU_LOG")'
-        " || gpu=''",
-        "    fi",
-        f'    echo "{_USAGE_PREFIX}final=$1 cpu_usec=$cpu memory_peak_bytes=$mem$gpu"',
+        "    local fields",
+        "    fields=$(mddash_counters) || fields=''",
+        f'    echo "{_USAGE_PREFIX}final=$1 started=$MDDASH_STARTED at=$(date +%s 2>/dev/null)$fields${{2:-}}"',
         "}",
         f"while sleep {interval} >/dev/null 2>&1; do",
         *(["    mddash_gpu_sample"] if gpus else []),
@@ -191,7 +252,7 @@ def _usage_block(gpus: bool, interval: float = USAGE_INTERVAL_SECONDS, cgroup: s
         "MDDASH_SAMPLER=$!",
         "mddash_usage_final() {",
         '    kill "$MDDASH_SAMPLER" 2>/dev/null || true',
-        "    mddash_usage 1",
+        f'    mddash_usage 1 "$({performance} 2>/dev/null || true)"' if performance else "    mddash_usage 1",
         "}",
     ]
     return "\n".join(lines)
@@ -345,9 +406,10 @@ def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
 
 
 def _amber_command(
-    binary: str, np: int, ewald: str, extra_args: str, base_flags: str, mdin_name: str, name: str
+    binary: str, np: int, ewald: str, extra_args: str, base_flags: str, mdin_name: str, name: str, mdout_name: str
 ) -> tuple[str, bool]:
     extra_part = f" {extra_args}" if extra_args else ""
+    performance = _amber_performance(mdout_name)
     patch_step = _mdin_patch_command(mdin_name, ewald)
     tee_redirect = f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
 
@@ -355,7 +417,7 @@ def _amber_command(
         command = "\n".join([
             "set -euo pipefail",
             patch_step,
-            _usage_block(gpus=True),
+            _usage_block(gpus=True, performance=performance),
             " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect + " &",
             _sim_guard_block("pmemd.cuda"),
         ])
@@ -364,7 +426,7 @@ def _amber_command(
     command = "\n".join([
         "set -euo pipefail",
         patch_step,
-        _usage_block(gpus=False),
+        _usage_block(gpus=False, performance=performance),
         " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect + " &",
         _sim_guard_block("pmemd.MPI"),
     ])
@@ -406,7 +468,7 @@ def create_gromacs_job(
 
     gromacs_command = "\n".join([
         "set -euo pipefail",
-        _usage_block(gpus=use_gpu),
+        _usage_block(gpus=use_gpu, performance=_gromacs_performance(f"{deffnm_arg}.log")),
         (
             " ".join([
                 "mpirun",
@@ -502,7 +564,9 @@ def create_amber_job(
         f"-x {_q(f'{output_prefix}.nc')} -inf {_q(f'{output_prefix}.mdinfo')}"
     )
 
-    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_rel, name)
+    amber_command, use_gpu = _amber_command(
+        binary, np, ewald, extra_args, base_flags, mdin_rel, name, f"{output_prefix}.out"
+    )
 
     manifest = _build_job_manifest(
         name=name,
@@ -605,9 +669,35 @@ def get_pod_times(ns: str, name: str) -> tuple[datetime | None, datetime | None]
 
 def _number(fields: dict[str, str], key: str) -> float | None:
     try:
-        return float(fields[key])
+        value = float(fields[key])
     except (KeyError, ValueError):
         return None
+    return value if math.isfinite(value) else None
+
+
+def _count(fields: dict[str, str], key: str) -> int | None:
+    value = _number(fields, key)
+    return None if value is None else int(value)
+
+
+def _seconds(fields: dict[str, str], key: str) -> float | None:
+    """Seconds from a microsecond counter."""
+    usec = _number(fields, key)
+    return None if usec is None else usec / 1_000_000
+
+
+def _timestamp(fields: dict[str, str], key: str) -> datetime | None:
+    epoch = _number(fields, key)
+    if epoch is None:
+        return None
+    try:
+        return datetime.fromtimestamp(epoch, UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _ratio(numerator: float | None, denominator: float | None) -> float | None:
+    return numerator / denominator if numerator is not None and denominator else None
 
 
 def parse_usage_line(line: str) -> MeasuredUsage | None:
@@ -624,11 +714,24 @@ def parse_usage_line(line: str) -> MeasuredUsage | None:
     if cpu_usec is None and memory_bytes is None and not gpu:
         return None
     return MeasuredUsage(
-        cpu_core_seconds=None if cpu_usec is None else cpu_usec / 1_000_000,
+        cpu_core_seconds=_seconds(fields, "cpu_usec"),
         memory_peak_gib=None if memory_bytes is None else memory_bytes / 2**30,
-        gpu_utilization=gpu_util_sum / gpu_samples if gpu and gpu_samples and gpu_util_sum is not None else None,
+        gpu_utilization=_ratio(gpu_util_sum, gpu_samples) if gpu else None,
         gpu_memory_peak_gib=gpu_memory_mib / 1024 if gpu and gpu_memory_mib is not None else None,
         complete=fields.get("final") == "1",
+        container_started_at=_timestamp(fields, "started"),
+        measured_at=_timestamp(fields, "at"),
+        cpu_throttled_seconds=_seconds(fields, "cpu_throttled_usec"),
+        cpu_stall_seconds=_seconds(fields, "cpu_stall_usec"),
+        memory_stall_seconds=_seconds(fields, "memory_stall_usec"),
+        io_stall_seconds=_seconds(fields, "io_stall_usec"),
+        oom_kills=_count(fields, "oom_kills"),
+        io_read_bytes=_count(fields, "io_read_bytes"),
+        io_write_bytes=_count(fields, "io_write_bytes"),
+        gpu_power_watts=_ratio(_number(fields, "gpu_power_sum_w"), _number(fields, "gpu_power_samples"))
+        if gpu
+        else None,
+        ns_per_day=_number(fields, "ns_per_day"),
     )
 
 

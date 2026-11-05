@@ -46,7 +46,9 @@ class MdrunUsageMeasurement(db.Model):  # type: ignore
     What a job used, as its simulation container measured itself; rows are never deleted.
 
     ``complete`` marks the container's exit line. A stop or DELETE keeps the last periodic line, so its values
-    can trail the end of the window by ``k8s_client.USAGE_INTERVAL_SECONDS``.
+    can trail the end of the window by ``k8s_client.USAGE_INTERVAL_SECONDS``. Columns mirror
+    ``k8s_client.MeasuredUsage``. ``create_all`` never adds columns to an existing table, so a new column
+    needs an ``ALTER TABLE`` wherever the table already exists.
     """
 
     __tablename__ = "mdrun_usage_measured"
@@ -57,6 +59,17 @@ class MdrunUsageMeasurement(db.Model):  # type: ignore
     gpu_utilization: Mapped[float | None] = mapped_column()
     gpu_memory_peak_gib: Mapped[float | None] = mapped_column()
     complete: Mapped[bool] = mapped_column(nullable=False)
+    container_started_at: Mapped[datetime | None] = mapped_column(db.DateTime)
+    measured_at: Mapped[datetime | None] = mapped_column(db.DateTime)
+    cpu_throttled_seconds: Mapped[float | None] = mapped_column()
+    cpu_stall_seconds: Mapped[float | None] = mapped_column()
+    memory_stall_seconds: Mapped[float | None] = mapped_column()
+    io_stall_seconds: Mapped[float | None] = mapped_column()
+    oom_kills: Mapped[int | None] = mapped_column()
+    io_read_bytes: Mapped[int | None] = mapped_column()
+    io_write_bytes: Mapped[int | None] = mapped_column()
+    gpu_power_watts: Mapped[float | None] = mapped_column()
+    ns_per_day: Mapped[float | None] = mapped_column()
 
 
 class MdrunJob(db.Model):  # type: ignore

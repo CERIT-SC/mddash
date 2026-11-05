@@ -7,7 +7,8 @@ storage is scoped to that simulation directory instead of the whole experiment.
 """
 
 import subprocess
-from datetime import UTC, datetime
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -598,32 +599,61 @@ class TestGetPodTimes:
         assert k8s_client.get_pod_times(ns="ns", name="mdrun-job") == (None, None)
 
 
-CPU_STAT = "usage_usec 7200000000\nuser_usec 7000000000\nsystem_usec 200000000\n"
+CPU_STAT = (
+    "usage_usec 7200000000\nuser_usec 7000000000\nsystem_usec 200000000\n"
+    "nr_periods 100\nnr_throttled 3\nthrottled_usec 90000000\n"
+)
 FOUR_GIB = 4 * 2**30
+TWO_GIB = 2 * 2**30
+CONTAINER_START = datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+
+
+def _pressure(total_usec: int) -> str:
+    return (
+        f"some avg10=0.00 avg60=0.00 avg300=0.00 total={total_usec}\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n"
+    )
 
 
 @pytest.fixture
 def cgroup(tmp_path: Path) -> Path:
-    """Write the container's own cgroup v2 counters: 2 core-hours of CPU, 4 GiB peak memory."""
+    """
+    Write the container's own cgroup v2 counters.
+
+    2 core-hours of CPU, 90 s throttled, 4 GiB peak memory, one OOM kill, 30 min waiting for CPU, 5 s for
+    memory, 30 s for I/O, and 2 GiB read and written across two devices.
+    """
     directory = tmp_path / "cgroup"
     directory.mkdir()
     (directory / "cpu.stat").write_text(CPU_STAT)
     (directory / "memory.peak").write_text(f"{FOUR_GIB}\n")
+    (directory / "memory.events").write_text("low 0\nhigh 0\nmax 2\noom 1\noom_kill 1\noom_group_kill 0\n")
+    (directory / "cpu.pressure").write_text(_pressure(1_800_000_000))
+    (directory / "memory.pressure").write_text(_pressure(5_000_000))
+    (directory / "io.pressure").write_text(_pressure(30_000_000))
+    (directory / "io.stat").write_text(
+        f"259:0 rbytes={2**30} wbytes={TWO_GIB} rios=1 wios=2 dbytes=0 dios=0\n"
+        f"8:0 rbytes={2**30} wbytes=0 rios=1 wios=0 dbytes=0 dios=0\n"
+    )
     return directory
 
 
-@pytest.fixture
-def nvidia_smi(tmp_path: Path) -> Path:
-    """Put an ``nvidia-smi`` on PATH that reports one GPU at 60 % with 2 GiB used and records each call."""
+def _fake_nvidia_smi(tmp_path: Path, sample: str) -> Path:
+    """Put an ``nvidia-smi`` on PATH that prints ``sample`` for one GPU and records each call."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     fake = bin_dir / "nvidia-smi"
-    fake.write_text(f"#!/bin/sh\necho called >> {tmp_path / 'nvidia-smi.calls'}\necho '60, 2048'\n")
+    fake.write_text(f"#!/bin/sh\necho called >> {tmp_path / 'nvidia-smi.calls'}\necho '{sample}'\n")
     fake.chmod(0o755)
     return bin_dir
 
 
-def _run(script: str, path: Path | None = None) -> list[str]:
+@pytest.fixture
+def nvidia_smi(tmp_path: Path) -> Path:
+    """One GPU at 60 % with 2 GiB used, drawing 150.5 W."""
+    return _fake_nvidia_smi(tmp_path, "60, 2048, 150.5")
+
+
+def _run(script: str, path: Path | None = None, cwd: Path | None = None) -> list[str]:
     """Run a job script the way the container does and return its log lines."""
     env = {"PATH": f"{path}:/usr/bin:/bin" if path else "/usr/bin:/bin"}
     result = subprocess.run(
@@ -631,6 +661,7 @@ def _run(script: str, path: Path | None = None) -> list[str]:
         capture_output=True,
         text=True,
         env=env,
+        cwd=cwd,
         timeout=30,
         check=False,
     )
@@ -641,6 +672,31 @@ def _last_usage(lines: list[str]) -> MeasuredUsage | None:
     return next((usage for line in reversed(lines) if (usage := k8s_client.parse_usage_line(line))), None)
 
 
+def _untimed(usage: MeasuredUsage | None) -> MeasuredUsage:
+    """Drop the container's clock readings, which differ on every run."""
+    assert usage is not None
+    assert usage.container_started_at is not None
+    assert usage.measured_at is not None
+    assert usage.measured_at >= usage.container_started_at
+    return replace(usage, container_started_at=None, measured_at=None)
+
+
+CPU_JOB_USAGE = MeasuredUsage(
+    cpu_core_seconds=7200.0,
+    memory_peak_gib=4.0,
+    gpu_utilization=None,
+    gpu_memory_peak_gib=None,
+    complete=True,
+    cpu_throttled_seconds=90.0,
+    cpu_stall_seconds=1800.0,
+    memory_stall_seconds=5.0,
+    io_stall_seconds=30.0,
+    oom_kills=1,
+    io_read_bytes=TWO_GIB,
+    io_write_bytes=TWO_GIB,
+)
+
+
 class TestUsageMeasurement:
     """The simulation container measures itself and logs the result for MDRun to read."""
 
@@ -649,28 +705,71 @@ class TestUsageMeasurement:
 
         lines = _run(f"{block}\nmddash_usage_final")
 
-        assert _last_usage(lines) == MeasuredUsage(
-            cpu_core_seconds=7200.0,
-            memory_peak_gib=4.0,
-            gpu_utilization=None,
-            gpu_memory_peak_gib=None,
-            complete=True,
-        )
+        assert _untimed(_last_usage(lines)) == CPU_JOB_USAGE
 
     def test_gpu_job_averages_nvidia_smi_samples(self, cgroup: Path, nvidia_smi: Path) -> None:
         block = k8s_client._usage_block(gpus=True, cgroup=str(cgroup), interval=0.1)
 
         lines = _run(f"{block}\nsleep 1\nmddash_usage_final", path=nvidia_smi)
 
-        assert _last_usage(lines) == MeasuredUsage(
-            cpu_core_seconds=7200.0,
-            memory_peak_gib=4.0,
-            gpu_utilization=60.0,
-            gpu_memory_peak_gib=2.0,
-            complete=True,
+        assert _untimed(_last_usage(lines)) == replace(
+            CPU_JOB_USAGE, gpu_utilization=60.0, gpu_memory_peak_gib=2.0, gpu_power_watts=150.5
         )
         # Periodic lines cover a stop, which deletes the pod before the exit line.
         assert any(usage and not usage.complete for usage in map(k8s_client.parse_usage_line, lines))
+
+    def test_gpu_without_a_power_reading_still_reports_utilization(self, cgroup: Path, tmp_path: Path) -> None:
+        block = k8s_client._usage_block(gpus=True, cgroup=str(cgroup), interval=0.1)
+
+        lines = _run(f"{block}\nsleep 0.5\nmddash_usage_final", path=_fake_nvidia_smi(tmp_path, "60, 2048, [N/A]"))
+
+        usage = _last_usage(lines)
+        assert usage is not None
+        assert (usage.gpu_utilization, usage.gpu_power_watts) == (60.0, None)
+
+    @pytest.mark.parametrize(
+        ("performance", "log_name", "log"),
+        [
+            # mdrun -cpi appends each part's report to the same log; the last one is this run's.
+            (
+                k8s_client._gromacs_performance,
+                "md.log",
+                "               (ns/day)    (hour/ns)\nPerformance:       10.000        2.400\n"
+                "               (ns/day)    (hour/ns)\nPerformance:       12.500        1.920\n",
+            ),
+            # pmemd reports the last steps, then all steps.
+            (
+                k8s_client._amber_performance,
+                "prod.out",
+                "|         ns/day =     146.21   seconds/ns =     590.93\n"
+                "|     Average timings for all steps:\n"
+                "|         ns/day =      12.50   seconds/ns =    6912.00\n",
+            ),
+        ],
+        ids=["gromacs", "amber"],
+    )
+    def test_exit_line_reports_the_engines_speed(
+        self, cgroup: Path, tmp_path: Path, performance: Any, log_name: str, log: str
+    ) -> None:
+        (tmp_path / log_name).write_text(log)
+        block = k8s_client._usage_block(
+            gpus=False, cgroup=str(cgroup), interval=3600, performance=performance(log_name)
+        )
+
+        lines = _run(f"{block}\nmddash_usage_final", cwd=tmp_path)
+
+        usage = _last_usage(lines)
+        assert usage is not None
+        assert usage.ns_per_day == pytest.approx(12.5)
+
+    def test_missing_engine_report_leaves_the_measurement(self, cgroup: Path, tmp_path: Path) -> None:
+        block = k8s_client._usage_block(
+            gpus=False, cgroup=str(cgroup), interval=3600, performance=k8s_client._gromacs_performance("md.log")
+        )
+
+        lines = _run(f"{block}\nmddash_usage_final", cwd=tmp_path)
+
+        assert _untimed(_last_usage(lines)) == CPU_JOB_USAGE
 
     def test_cpu_job_never_samples_gpus(self, cgroup: Path, nvidia_smi: Path, tmp_path: Path) -> None:
         """A CPU job on a GPU node may see other jobs' GPUs."""
@@ -779,7 +878,35 @@ class TestGetMeasuredUsage:
         ),
         ("mddash-usage final=1 cpu_usec=lots memory_peak_bytes=", None),
         ("simulation output mentioning mddash-usage final=1 cpu_usec=1", None),
+        (
+            "mddash-usage final=1 cpu_usec=1500000 ns_per_day=nan started=99999999999999999999",
+            MeasuredUsage(
+                cpu_core_seconds=1.5,
+                memory_peak_gib=None,
+                gpu_utilization=None,
+                gpu_memory_peak_gib=None,
+                complete=True,
+            ),
+        ),
+        (
+            f"mddash-usage final=0 started={int(CONTAINER_START.timestamp())} "
+            f"at={int(CONTAINER_START.timestamp()) + 3600} cpu_usec=1000000 oom_kills=0 cpu_stall_usec=2000000 "
+            "gpu_samples=2 gpu_util_sum=100 gpu_memory_peak_mib=1024 gpu_power_sum_w=300.0 gpu_power_samples=2",
+            MeasuredUsage(
+                cpu_core_seconds=1.0,
+                memory_peak_gib=None,
+                gpu_utilization=50.0,
+                gpu_memory_peak_gib=1.0,
+                complete=False,
+                container_started_at=CONTAINER_START,
+                measured_at=CONTAINER_START + timedelta(hours=1),
+                cpu_stall_seconds=2.0,
+                oom_kills=0,
+                gpu_power_watts=150.0,
+            ),
+        ),
     ],
+    ids=["empty", "cpu-only", "not-a-number", "not-at-line-start", "not-finite", "diagnostics"],
 )
 def test_parse_usage_line_takes_only_complete_numbers(line: str, expected: MeasuredUsage | None) -> None:
     assert k8s_client.parse_usage_line(line) == expected

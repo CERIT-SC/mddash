@@ -21,7 +21,12 @@ UNMEASURED = {
     "mddash_mdrun_measured_cpu_core_seconds_allocated": 0,
     "mddash_mdrun_measured_gpu_seconds_busy": 0,
     "mddash_mdrun_measured_gpu_seconds_allocated": 0,
+    "mddash_mdrun_measured_container_seconds": 0,
+    "mddash_mdrun_measured_cpu_stall_seconds": 0,
+    "mddash_mdrun_measured_oom_kills": 0,
+    "mddash_mdrun_measured_gpu_energy_joules": 0,
 }
+NOTHING_PENDING = {"mddash_mdrun_pending_jobs": 0, "mddash_mdrun_pending_gpus": 0}
 
 
 def _row(
@@ -33,6 +38,7 @@ def _row(
     cpu_cores: int = 4,
     memory_gib: int = 4,
     gpus: int = 0,
+    created_at: datetime | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     outcome: UsageOutcome | None = None,
@@ -47,6 +53,7 @@ def _row(
         cpu_cores=cpu_cores,
         memory_gib=memory_gib,
         gpus=gpus,
+        created_at=created_at or started_at or NOW,
         started_at=started_at,
         finished_at=finished_at,
         outcome=outcome,
@@ -100,22 +107,26 @@ class TestLedgerCollector:
 
         assert _samples(registry, ALICE_GMX) == {
             "mddash_mdrun_jobs_started": 2,
+            "mddash_mdrun_queue_wait_seconds": 0,
             "mddash_mdrun_cpu_core_seconds": 158_400,  # 16 cores x 2.5 h + 4 cores x 1 h so far
             "mddash_mdrun_gpu_seconds": 9_000,
             "mddash_mdrun_memory_gib_seconds": 86_400,  # 8 GiB x 2.5 h + 4 GiB x 1 h so far
             "mddash_mdrun_allocated_cpu_cores": 4,
             "mddash_mdrun_allocated_gpus": 0,
             "mddash_mdrun_allocated_memory_gib": 4,
+            **NOTHING_PENDING,
             **UNMEASURED,
         }
         assert _samples(registry, ALICE_AMBER) == {
             "mddash_mdrun_jobs_started": 1,
+            "mddash_mdrun_queue_wait_seconds": 0,
             "mddash_mdrun_cpu_core_seconds": 3_600,
             "mddash_mdrun_gpu_seconds": 3_600,
             "mddash_mdrun_memory_gib_seconds": 14_400,
             "mddash_mdrun_allocated_cpu_cores": 0,
             "mddash_mdrun_allocated_gpus": 0,
             "mddash_mdrun_allocated_memory_gib": 0,
+            **NOTHING_PENDING,
             **UNMEASURED,
         }
 
@@ -151,9 +162,65 @@ class TestLedgerCollector:
             "mddash_mdrun_measured_cpu_core_seconds_allocated": 57_600,  # 8 cores x 2 h
             "mddash_mdrun_measured_gpu_seconds_busy": 5_400,  # 75 % of 2 h
             "mddash_mdrun_measured_gpu_seconds_allocated": 7_200,
+            "mddash_mdrun_measured_container_seconds": 0,
+            "mddash_mdrun_measured_cpu_stall_seconds": 0,
+            "mddash_mdrun_measured_oom_kills": 0,
+            "mddash_mdrun_measured_gpu_energy_joules": 0,
         }
 
-    def test_jobs_that_never_held_resources_count_nothing(
+    def test_measured_jobs_report_their_diagnostics(self, registry: CollectorRegistry, db_session: Session) -> None:
+        container_start = NOW - timedelta(hours=3, minutes=55)
+        db_session.add(
+            _row(
+                "diagnosed",
+                gpus=1,
+                started_at=NOW - timedelta(hours=4),
+                finished_at=NOW - timedelta(hours=1),
+                outcome=UsageOutcome.FINISHED,
+                # The container ran 2 h with tasks waiting for CPU for 30 min, on one GPU drawing 200 W.
+                measurement=MdrunUsageMeasurement(
+                    job_id="diagnosed",
+                    cpu_core_seconds=3_600.0,
+                    gpu_utilization=50.0,
+                    complete=True,
+                    container_started_at=container_start,
+                    measured_at=container_start + timedelta(hours=2),
+                    cpu_stall_seconds=1_800.0,
+                    oom_kills=1,
+                    gpu_power_watts=200.0,
+                ),
+            )
+        )
+        db_session.commit()
+
+        samples = _samples(registry, ALICE_GMX)
+
+        assert (
+            samples["mddash_mdrun_measured_container_seconds"],
+            samples["mddash_mdrun_measured_cpu_stall_seconds"],
+            samples["mddash_mdrun_measured_oom_kills"],
+            samples["mddash_mdrun_measured_gpu_energy_joules"],
+        ) == (7_200, 1_800, 1, 1_440_000)
+
+    def test_waiting_jobs_and_queue_wait(self, registry: CollectorRegistry, db_session: Session) -> None:
+        db_session.add_all([
+            _row("queued", gpus=2, created_at=NOW - timedelta(minutes=10)),
+            _row(
+                "waited",
+                created_at=NOW - timedelta(hours=2),
+                started_at=NOW - timedelta(hours=1, minutes=30),
+                finished_at=NOW - timedelta(hours=1),
+                outcome=UsageOutcome.FINISHED,
+            ),
+        ])
+        db_session.commit()
+
+        samples = _samples(registry, ALICE_GMX)
+
+        assert (samples["mddash_mdrun_pending_jobs"], samples["mddash_mdrun_pending_gpus"]) == (1, 2)
+        assert (samples["mddash_mdrun_jobs_started"], samples["mddash_mdrun_queue_wait_seconds"]) == (1, 1_800)
+
+    def test_jobs_that_never_held_resources_count_only_as_waiting(
         self, registry: CollectorRegistry, db_session: Session
     ) -> None:
         stopped_in_queue = NOW - timedelta(hours=1)
@@ -169,7 +236,10 @@ class TestLedgerCollector:
         ])
         db_session.commit()
 
-        assert set(_samples(registry, ALICE_GMX).values()) == {0}
+        assert {name: value for name, value in _samples(registry, ALICE_GMX).items() if value} == {
+            "mddash_mdrun_pending_jobs": 1,
+            "mddash_mdrun_pending_gpus": 1,
+        }
 
     def test_unattributed_jobs_have_empty_owner_labels(self, registry: CollectorRegistry, db_session: Session) -> None:
         db_session.add(_row("legacy-client", owner=None, owner_namespace=None, started_at=NOW - timedelta(hours=1)))
