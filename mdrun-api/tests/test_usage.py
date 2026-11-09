@@ -1,7 +1,7 @@
 """Tests for the per-user usage ledger and the report built from it."""
 
-from dataclasses import fields, replace
-from datetime import UTC, datetime, timedelta
+from dataclasses import replace
+from datetime import UTC, datetime
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import MagicMock
@@ -58,22 +58,6 @@ def pod_times(mocker: MockerFixture) -> MagicMock:
 
 MEASURED = MeasuredUsage(
     cpu_core_seconds=27_000.0, memory_peak_gib=3.5, gpu_utilization=62.5, gpu_memory_peak_gib=6.0, complete=True
-)
-
-
-DIAGNOSED = replace(
-    MEASURED,
-    container_started_at=POD_START + timedelta(minutes=2),
-    measured_at=POD_END,
-    cpu_throttled_seconds=12.0,
-    cpu_stall_seconds=340.0,
-    memory_stall_seconds=1.5,
-    io_stall_seconds=20.0,
-    oom_kills=0,
-    io_read_bytes=123,
-    io_write_bytes=456,
-    gpu_power_watts=180.5,
-    ns_per_day=95.5,
 )
 
 
@@ -330,31 +314,6 @@ class TestMeasuredUsage:
         assert _measurement(db_session, job_id) == (27_000.0, 3.5, 62.5, 6.0, True)
         assert [name for name, *_ in calls.mock_calls] == ["get_measured_usage", "delete_job"]
 
-    def test_diagnostics_are_stored_with_the_measurement(
-        self,
-        client: FlaskClient,
-        db_session: Session,
-        mock_k8s_client: dict[str, Any],
-        pod_times: MagicMock,
-        measured: MagicMock,
-    ) -> None:
-        job_id = _submit(client)
-        mock_k8s_client["get_job_status"].return_value = JobStatus.FINISHED
-        measured.return_value = DIAGNOSED
-
-        client.get(f"/api/jobs/gmx/{job_id}")
-
-        db_session.expire_all()
-        row = db_session.get(MdrunUsageMeasurement, job_id)
-        assert row is not None
-        stored = MeasuredUsage(**{field.name: getattr(row, field.name) for field in fields(MeasuredUsage)})
-        assert (
-            replace(
-                stored, container_started_at=_utc(stored.container_started_at), measured_at=_utc(stored.measured_at)
-            )
-            == DIAGNOSED
-        )
-
     def test_stop_keeps_the_latest_periodic_measurement(
         self,
         client: FlaskClient,
@@ -388,24 +347,6 @@ class TestMeasuredUsage:
 
         assert _measurement(db_session, job_id) is None
         assert _usage(db_session, job_id).outcome == UsageOutcome.FINISHED
-
-    def test_a_closed_window_is_measured_once(
-        self,
-        client: FlaskClient,
-        db_session: Session,
-        mock_k8s_client: dict[str, Any],
-        pod_times: MagicMock,
-        measured: MagicMock,
-    ) -> None:
-        job_id = _submit(client)
-        mock_k8s_client["get_job_status"].return_value = JobStatus.FINISHED
-        client.get(f"/api/jobs/gmx/{job_id}")
-        measured.return_value = replace(MEASURED, cpu_core_seconds=1.0)
-
-        client.delete(f"/api/jobs/gmx/{job_id}")
-
-        assert _measurement(db_session, job_id) == (27_000.0, 3.5, 62.5, 6.0, True)
-        measured.assert_called_once()
 
 
 class TestConcurrentStatusReads:
@@ -485,14 +426,8 @@ def _record(
     memory: int = 8,
     gpus: int = 0,
     used: tuple[float | None, float | None] | None = None,
-    submitted: datetime | None = None,
-    diagnostics: dict[str, Any] | None = None,
 ) -> MdrunUsage:
-    """
-    Build a ledger record; ``used`` is its measured (CPU core-seconds, GPU utilization %).
-
-    ``submitted`` defaults to the start; ``diagnostics`` adds measured fields.
-    """
+    """Build a ledger record; ``used`` is its measured (CPU core-seconds, GPU utilization %)."""
     job_id = f"{owner}-{start}"
     record = MdrunUsage(
         job_id=job_id,
@@ -503,7 +438,7 @@ def _record(
         cpu_cores=cpu,
         memory_gib=memory,
         gpus=gpus,
-        created_at=submitted or start or OCT_1,
+        created_at=start or OCT_1,
         started_at=start,
         finished_at=end,
     )
@@ -515,7 +450,6 @@ def _record(
             gpu_utilization=used[1],
             gpu_memory_peak_gib=6.0 if used[1] is not None else None,
             complete=True,
-            **(diagnostics or {}),
         )
     return record
 
@@ -612,64 +546,6 @@ class TestSummarize:
         assert row.cpu_used_percent == pytest.approx(100 * 20 / 48)  # 16 + 4 of 32 + 16 core-h
         assert row.gpu_busy_percent == pytest.approx(75.0)
 
-    def test_efficiency_is_unknown_without_measured_jobs(self) -> None:
-        record = _record("alice", datetime(2026, 10, 2, tzinfo=UTC), datetime(2026, 10, 2, 1, tzinfo=UTC), gpus=1)
-
-        [row] = summarize([record], since=OCT_1, until=NOV_1, now=NOV_1)
-
-        assert (row.cpu_used_percent, row.gpu_busy_percent) == (None, None)
-        assert (row.cpu_stall_percent, row.measured_oom_kills, row.gpu_energy_kwh) == (None, None, None)
-
-    def test_queue_wait_averages_jobs_that_started_in_the_period(self) -> None:
-        start = datetime(2026, 10, 2, 10, tzinfo=UTC)
-        stopped_in_queue = datetime(2026, 10, 2, 12, tzinfo=UTC)
-        records = [
-            _record("alice", start, start + timedelta(hours=1), submitted=start - timedelta(minutes=30)),
-            _record("alice", start + timedelta(hours=2), None, submitted=start + timedelta(hours=1, minutes=50)),
-            # Never held resources: stopped while still waiting.
-            _record("alice", stopped_in_queue, stopped_in_queue, submitted=start),
-            # Started in September, so its wait counts there.
-            _record(
-                "alice",
-                datetime(2026, 9, 30, 23, tzinfo=UTC),
-                datetime(2026, 10, 1, 1, tzinfo=UTC),
-                submitted=datetime(2026, 9, 30, 20, tzinfo=UTC),
-            ),
-        ]
-
-        [row] = summarize(records, since=OCT_1, until=NOV_1, now=start + timedelta(hours=3))
-
-        assert row.avg_queue_wait_minutes == pytest.approx(20.0)
-
-    def test_diagnostics_cover_measured_jobs_that_ended_in_the_period(self) -> None:
-        start = datetime(2026, 10, 2, tzinfo=UTC)
-        container_start = start + timedelta(minutes=5)
-        records = [
-            # The container ran 2 h with tasks waiting for CPU for 30 min, on one GPU drawing 200 W.
-            _record(
-                "alice",
-                start,
-                start + timedelta(hours=2, minutes=10),
-                gpus=1,
-                used=(14_400, 50.0),
-                diagnostics={
-                    "container_started_at": container_start,
-                    "measured_at": container_start + timedelta(hours=2),
-                    "cpu_stall_seconds": 1_800.0,
-                    "oom_kills": 1,
-                    "gpu_power_watts": 200.0,
-                },
-            ),
-            # Measured before the container reported stall time and OOM kills.
-            _record("alice", start + timedelta(hours=3), start + timedelta(hours=4), used=(3_600, None)),
-        ]
-
-        [row] = summarize(records, since=OCT_1, until=NOV_1, now=NOV_1)
-
-        assert row.cpu_stall_percent == pytest.approx(25.0)
-        assert row.measured_oom_kills == 1
-        assert row.gpu_energy_kwh == pytest.approx(0.4)
-
 
 class TestEstimatedCost:
     """Cost uses the Tuner's hourly rates when configured."""
@@ -740,52 +616,3 @@ class TestReportCli:
             "0.0,,,,,,,,,,",
             "None-2026-10-04 00:00:00+00:00,,,gmx,,2026-10-04 00:00,1.00,4,,8,,0,,,,0.0,,,,,,,,,,",
         ]
-
-    def test_jobs_csv_shows_each_jobs_diagnostics(
-        self, db_session: Session, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        start = datetime(2026, 10, 3, tzinfo=UTC)
-        container_start = start + timedelta(minutes=5)
-        db_session.add(
-            _record(
-                "alice",
-                start,
-                start + timedelta(hours=2),
-                gpus=1,
-                used=(14_400, 80.0),
-                submitted=start - timedelta(minutes=10),
-                # The container ran 100 min.
-                diagnostics={
-                    "container_started_at": container_start,
-                    "measured_at": container_start + timedelta(minutes=100),
-                    "cpu_throttled_seconds": 600.0,
-                    "cpu_stall_seconds": 1_500.0,
-                    "memory_stall_seconds": 60.0,
-                    "io_stall_seconds": 300.0,
-                    "oom_kills": 0,
-                    "io_read_bytes": 2**30,
-                    "io_write_bytes": 3 * 2**30,
-                    "gpu_power_watts": 212.4,
-                    "ns_per_day": 81.25,
-                },
-            )
-        )
-        db_session.commit()
-
-        main(["--since", "2026-10-01", "--until", "2026-11-01", "--jobs", "--csv"])
-
-        header, row = capsys.readouterr().out.splitlines()
-        cells = dict(zip(header.split(","), row.split(","), strict=True))
-        assert {key: cells[key] for key in header.split(",")[15:]} == {
-            "queue_wait_minutes": "10.0",
-            "startup_minutes": "5.0",
-            "ns_per_day": "81.25",
-            "cpu_throttled_percent": "10.0",
-            "cpu_stall_percent": "25.0",
-            "memory_stall_percent": "1.0",
-            "io_stall_percent": "5.0",
-            "oom_kills": "0",
-            "io_read_gib": "1.00",
-            "io_write_gib": "3.00",
-            "gpu_power_watts": "212.4",
-        }

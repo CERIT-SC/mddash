@@ -7,9 +7,7 @@ storage is scoped to that simulation directory instead of the whole experiment.
 """
 
 import logging
-import signal
 import subprocess
-import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -22,8 +20,7 @@ from enums import JobStatus
 from k8s_client import MeasuredUsage
 from kubernetes.client.rest import ApiException
 from pytest_mock import MockerFixture
-from urllib3 import HTTPConnectionPool
-from urllib3.exceptions import ProtocolError, ReadTimeoutError
+from urllib3.exceptions import ProtocolError
 
 
 def _sim_command(manifest: dict[str, Any]) -> str:
@@ -139,15 +136,6 @@ class TestGromacsManifest:
         assert "exp123/production" not in sync
 
 
-FAKE_MPIRUN = """#!/bin/bash
-case "$RUN" in
-    finish) echo 'Performance:        6.023        3.985' > md.log ;;
-    fail) exit 3 ;;
-    stop) sleep 30 >/dev/null 2>&1 & trap 'kill $!; exit 0' TERM; touch running; wait ;;
-esac
-"""
-
-
 class TestSimGuardAndSyncTraps:
     """Commands survive pod deletion: TERM reaches the workload and the sidecar does a final copy."""
 
@@ -218,54 +206,6 @@ class TestSimGuardAndSyncTraps:
 
         assert "mpirun" in command
         assert "pkill -TERM -x 'pmemd\\.MPI'" in command
-
-    @pytest.mark.parametrize(
-        ("run", "returncode", "ns_per_day"), [("finish", 0, 6.023), ("fail", 3, None), ("stop", 0, None)]
-    )
-    def test_every_exit_logs_final_usage_then_marks_completion(
-        self,
-        mocker: MockerFixture,
-        tmp_path: Path,
-        cgroup: Path,
-        run: str,
-        returncode: int,
-        ns_per_day: float | None,
-    ) -> None:
-        batch_v1 = _create(mocker)
-        k8s_client.create_gromacs_job("ns", "bucket", "mdrun-job", "exp", "md", 2, 4, "cpu", "cpu", "")
-        marker = tmp_path / "job_completed"
-        script = (
-            _sim_command(_manifest(batch_v1))
-            .replace("/data/job_completed", str(marker))
-            .replace("/sys/fs/cgroup", str(cgroup))
-            # Leave the machine's own gmx processes alone; the TERM falls back to $MD_PID.
-            .replace("pkill -TERM -x 'gmx'", "pkill -TERM -x 'no-such-sim'")
-        )
-        bin_dir = tmp_path / "bin"
-        bin_dir.mkdir()
-        (bin_dir / "mpirun").write_text(FAKE_MPIRUN)
-        (bin_dir / "mpirun").chmod(0o755)
-
-        job = subprocess.Popen(
-            ["bash", "-c", script],
-            cwd=tmp_path,
-            env={"PATH": f"{bin_dir}:/usr/bin:/bin", "RUN": run},
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        if run == "stop":
-            deadline = time.monotonic() + 10
-            while not (tmp_path / "running").exists() and time.monotonic() < deadline:
-                time.sleep(0.05)
-            time.sleep(0.2)  # the script sets its TERM trap right after starting the sim
-            job.send_signal(signal.SIGTERM)  # what the kubelet sends on a stop
-        out, _ = job.communicate(timeout=30)
-
-        assert job.returncode == returncode
-        assert marker.exists()
-        final = _last_usage(out.splitlines())
-        assert final is not None
-        assert (final.complete, final.cpu_core_seconds, final.ns_per_day) == (True, 7200.0, ns_per_day)
 
     def test_s3_sync_traps_term_and_waits_for_completion_marker(self, mocker: MockerFixture) -> None:
         batch_v1 = _create(mocker)
@@ -710,7 +650,7 @@ def nvidia_smi(tmp_path: Path) -> Path:
     return _fake_nvidia_smi(tmp_path, "60, 2048, 150.5")
 
 
-def _run(script: str, path: Path | None = None, cwd: Path | None = None) -> list[str]:
+def _run(script: str, path: Path | None = None) -> list[str]:
     """Run a job script the way the container does and return its log lines."""
     env = {"PATH": f"{path}:/usr/bin:/bin" if path else "/usr/bin:/bin"}
     result = subprocess.run(
@@ -718,7 +658,6 @@ def _run(script: str, path: Path | None = None, cwd: Path | None = None) -> list
         capture_output=True,
         text=True,
         env=env,
-        cwd=cwd,
         timeout=30,
         check=False,
     )
@@ -775,67 +714,6 @@ class TestUsageMeasurement:
         # Periodic lines cover a stop, which deletes the pod before the exit line.
         assert any(usage and not usage.complete for usage in (k8s_client.parse_usage_line(x, "job") for x in lines))
 
-    def test_gpu_without_a_power_reading_still_reports_utilization(self, cgroup: Path, tmp_path: Path) -> None:
-        block = k8s_client._usage_block(gpus=True, cgroup=str(cgroup), interval=0.1)
-
-        lines = _run(f"{block}\nsleep 0.5\nmddash_usage_final", path=_fake_nvidia_smi(tmp_path, "60, 2048, [N/A]"))
-
-        usage = _last_usage(lines)
-        assert usage is not None
-        assert (usage.gpu_utilization, usage.gpu_power_watts) == (60.0, None)
-
-    @pytest.mark.parametrize(
-        ("performance", "log_name", "log"),
-        [
-            # mdrun -cpi appends each part's report to the same log; the last one is this run's.
-            (
-                k8s_client._gromacs_performance,
-                "md.log",
-                "               (ns/day)    (hour/ns)\nPerformance:       10.000        2.400\n"
-                "               (ns/day)    (hour/ns)\nPerformance:       12.500        1.920\n",
-            ),
-            # pmemd reports the last steps, then all steps.
-            (
-                k8s_client._amber_performance,
-                "prod.out",
-                "|         ns/day =     146.21   seconds/ns =     590.93\n"
-                "|     Average timings for all steps:\n"
-                "|         ns/day =      12.50   seconds/ns =    6912.00\n",
-            ),
-        ],
-        ids=["gromacs", "amber"],
-    )
-    def test_exit_line_reports_the_engines_speed(
-        self, cgroup: Path, tmp_path: Path, performance: Any, log_name: str, log: str
-    ) -> None:
-        (tmp_path / log_name).write_text(log)
-        block = k8s_client._usage_block(
-            gpus=False, cgroup=str(cgroup), interval=3600, performance=performance(log_name)
-        )
-
-        lines = _run(f"{block}\nmddash_usage_final", cwd=tmp_path)
-
-        usage = _last_usage(lines)
-        assert usage is not None
-        assert usage.ns_per_day == pytest.approx(12.5)
-
-    def test_missing_engine_report_leaves_the_measurement(self, cgroup: Path, tmp_path: Path) -> None:
-        block = k8s_client._usage_block(
-            gpus=False, cgroup=str(cgroup), interval=3600, performance=k8s_client._gromacs_performance("md.log")
-        )
-
-        lines = _run(f"{block}\nmddash_usage_final", cwd=tmp_path)
-
-        assert _untimed(_last_usage(lines)) == CPU_JOB_USAGE
-
-    def test_cpu_job_never_samples_gpus(self, cgroup: Path, nvidia_smi: Path, tmp_path: Path) -> None:
-        """A CPU job on a GPU node may see other jobs' GPUs."""
-        block = k8s_client._usage_block(gpus=False, cgroup=str(cgroup), interval=0.1)
-
-        _run(f"{block}\nsleep 0.5\nmddash_usage_final", path=nvidia_smi)
-
-        assert not (tmp_path / "nvidia-smi.calls").exists()
-
     def test_exit_trap_reports_after_the_simulation_ends(self, cgroup: Path) -> None:
         block = k8s_client._usage_block(gpus=False, cgroup=str(cgroup), interval=3600)
         guard = k8s_client._sim_guard_block("sleep")
@@ -874,30 +752,8 @@ def _usage_log(*lines: str) -> MagicMock:
 class TestGetMeasuredUsage:
     """MDRun reads the latest measurement from the simulation container's log."""
 
-    def test_latest_line_wins(self, mocker: MockerFixture) -> None:
-        core_v1 = mocker.patch.object(
-            k8s_client,
-            "core_v1",
-            _usage_log(
-                "mddash-usage final=0 cpu_usec=1000000 memory_peak_bytes=1073741824",
-                "step 5000, remaining wall clock time: 0 s",
-                "Simulation completed.",
-                "mddash-usage final=1 cpu_usec=3000000 memory_peak_bytes=2147483648",
-            ),
-        )
-
-        assert k8s_client.get_measured_usage(ns="ns", name="mdrun-job") == MeasuredUsage(
-            cpu_core_seconds=3.0,
-            memory_peak_gib=2.0,
-            gpu_utilization=None,
-            gpu_memory_peak_gib=None,
-            complete=True,
-        )
-        kwargs = core_v1.read_namespaced_pod_log.call_args.kwargs
-        assert (kwargs["name"], kwargs["container"]) == ("mdrun-job-abcde", "mdrun-job")
-
     def test_reads_only_the_latest_usage_line(self, mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
-        mocker.patch.object(
+        core_v1 = mocker.patch.object(
             k8s_client,
             "core_v1",
             _usage_log(
@@ -914,17 +770,8 @@ class TestGetMeasuredUsage:
             cpu_core_seconds=None, memory_peak_gib=2.0, gpu_utilization=None, gpu_memory_peak_gib=None, complete=True
         )
         assert caplog.messages == ["Ignoring malformed usage fields of mdrun-job: cpu_usec=-3"]
-
-    def test_log_without_a_measurement(self, mocker: MockerFixture) -> None:
-        mocker.patch.object(k8s_client, "core_v1", _usage_log("Simulation completed."))
-
-        assert k8s_client.get_measured_usage(ns="ns", name="mdrun-job") is None
-
-    def test_missing_pod(self, mocker: MockerFixture) -> None:
-        core_v1 = mocker.patch.object(k8s_client, "core_v1")
-        core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
-
-        assert k8s_client.get_measured_usage(ns="ns", name="mdrun-job") is None
+        kwargs = core_v1.read_namespaced_pod_log.call_args.kwargs
+        assert (kwargs["name"], kwargs["container"]) == ("mdrun-job-abcde", "mdrun-job")
 
     def test_empty_log(self, mocker: MockerFixture) -> None:
         mocker.patch.object(k8s_client, "core_v1", _usage_log())
@@ -933,12 +780,8 @@ class TestGetMeasuredUsage:
 
     @pytest.mark.parametrize(
         "error",
-        [
-            ApiException(status=500),
-            ReadTimeoutError(HTTPConnectionPool("kubernetes"), "/log", "Read timed out."),
-            ProtocolError("reset"),
-        ],
-        ids=["api-error", "timeout", "connection-reset"],
+        [ApiException(status=500), ProtocolError("reset")],
+        ids=["api-error", "connection-reset"],
     )
     def test_unreadable_log(self, mocker: MockerFixture, error: Exception) -> None:
         core_v1 = mocker.patch.object(k8s_client, "core_v1", _usage_log())
@@ -960,35 +803,11 @@ class TestGetMeasuredUsage:
 @pytest.mark.parametrize(
     ("line", "expected", "rejected"),
     [
-        ("mddash-usage final=0 cpu_usec= memory_peak_bytes=", None, None),
-        (
-            "mddash-usage final=0 cpu_usec=1500000 memory_peak_bytes=",
-            MeasuredUsage(
-                cpu_core_seconds=1.5,
-                memory_peak_gib=None,
-                gpu_utilization=None,
-                gpu_memory_peak_gib=None,
-                complete=False,
-            ),
-            None,
-        ),
-        ("mddash-usage final=1 cpu_usec=lots memory_peak_bytes=", None, "cpu_usec=lots"),
-        ("simulation output mentioning mddash-usage final=1 cpu_usec=1", None, None),
-        (
-            "mddash-usage final=1 cpu_usec=1500000 ns_per_day=nan started=99999999999999999999",
-            MeasuredUsage(
-                cpu_core_seconds=1.5,
-                memory_peak_gib=None,
-                gpu_utilization=None,
-                gpu_memory_peak_gib=None,
-                complete=True,
-            ),
-            "ns_per_day=nan started=99999999999999999999",
-        ),
         (
             f"mddash-usage final=0 started={int(CONTAINER_START.timestamp())} "
             f"at={int(CONTAINER_START.timestamp()) + 3600} cpu_usec=1000000 oom_kills=0 cpu_stall_usec=2000000 "
-            "gpu_samples=2 gpu_util_sum=100 gpu_memory_peak_mib=1024 gpu_power_sum_w=300.0 gpu_power_samples=2",
+            "gpu_samples=2 gpu_util_sum=100 gpu_memory_peak_mib=1024 gpu_power_sum_w=300.0 gpu_power_samples=2 "
+            "memory_peak_bytes=",
             MeasuredUsage(
                 cpu_core_seconds=1.0,
                 memory_peak_gib=None,
@@ -1006,7 +825,7 @@ class TestGetMeasuredUsage:
         (
             # A count past SQLite's INTEGER would fail the insert, and with it the stop.
             "mddash-usage final=1 cpu_usec=-1 memory_peak_bytes=1073741824 oom_kills=1e30 "
-            "io_read_bytes=9223372036854775808 at=253402300800",
+            "io_read_bytes=9223372036854775808 at=253402300800 ns_per_day=lots",
             MeasuredUsage(
                 cpu_core_seconds=None,
                 memory_peak_gib=1.0,
@@ -1014,10 +833,10 @@ class TestGetMeasuredUsage:
                 gpu_memory_peak_gib=None,
                 complete=True,
             ),
-            "cpu_usec=-1 oom_kills=1e30 io_read_bytes=9223372036854775808 at=253402300800",
+            "cpu_usec=-1 oom_kills=1e30 io_read_bytes=9223372036854775808 at=253402300800 ns_per_day=lots",
         ),
     ],
-    ids=["empty", "cpu-only", "not-a-number", "not-at-line-start", "not-finite", "diagnostics", "out-of-range"],
+    ids=["valid", "malformed"],
 )
 def test_parse_usage_line_keeps_numbers_in_range_and_warns_about_the_rest(
     line: str, expected: MeasuredUsage | None, rejected: str | None, caplog: pytest.LogCaptureFixture

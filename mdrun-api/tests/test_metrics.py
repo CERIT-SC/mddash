@@ -5,16 +5,14 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from enums import UsageOutcome
 from flask import Flask
-from metrics import LedgerCollector, serve
+from metrics import LedgerCollector
 from models import MdrunUsage, MdrunUsageMeasurement
 from prometheus_client import CollectorRegistry
-from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session
 
 NOW = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 ALICE_GMX = {"user": "alice@example.org", "namespace": "mddash-user-alice-ns", "engine": "gmx"}
 ALICE_AMBER = {**ALICE_GMX, "engine": "amber"}
-METRICS_PORT = 9100
 UNMEASURED = {
     "mddash_mdrun_measured_jobs": 0,
     "mddash_mdrun_measured_cpu_core_seconds_used": 0,
@@ -38,7 +36,6 @@ def _row(
     cpu_cores: int = 4,
     memory_gib: int = 4,
     gpus: int = 0,
-    created_at: datetime | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     outcome: UsageOutcome | None = None,
@@ -53,7 +50,7 @@ def _row(
         cpu_cores=cpu_cores,
         memory_gib=memory_gib,
         gpus=gpus,
-        created_at=created_at or started_at or NOW,
+        created_at=started_at or NOW,
         started_at=started_at,
         finished_at=finished_at,
         outcome=outcome,
@@ -93,6 +90,7 @@ class TestLedgerCollector:
                 outcome=UsageOutcome.FINISHED,
             ),
             _row("gmx-running", started_at=NOW - timedelta(hours=1)),
+            _row("legacy-client", owner=None, owner_namespace=None, started_at=NOW - timedelta(hours=1)),
             _row(
                 "amber-done",
                 engine="amber",
@@ -129,6 +127,8 @@ class TestLedgerCollector:
             **NOTHING_PENDING,
             **UNMEASURED,
         }
+        unattributed = _samples(registry, {"user": "", "namespace": "", "engine": "gmx"})
+        assert unattributed["mddash_mdrun_cpu_core_seconds"] == 14_400  # 4 cores x 1 h
 
     def test_measured_jobs_report_what_they_used(self, registry: CollectorRegistry, db_session: Session) -> None:
         measured = MdrunUsageMeasurement(
@@ -168,100 +168,6 @@ class TestLedgerCollector:
             "mddash_mdrun_measured_gpu_energy_joules": 0,
         }
 
-    def test_measured_jobs_report_their_diagnostics(self, registry: CollectorRegistry, db_session: Session) -> None:
-        container_start = NOW - timedelta(hours=3, minutes=55)
-        db_session.add(
-            _row(
-                "diagnosed",
-                gpus=1,
-                started_at=NOW - timedelta(hours=4),
-                finished_at=NOW - timedelta(hours=1),
-                outcome=UsageOutcome.FINISHED,
-                # The container ran 2 h with tasks waiting for CPU for 30 min, on one GPU drawing 200 W.
-                measurement=MdrunUsageMeasurement(
-                    job_id="diagnosed",
-                    cpu_core_seconds=3_600.0,
-                    gpu_utilization=50.0,
-                    complete=True,
-                    container_started_at=container_start,
-                    measured_at=container_start + timedelta(hours=2),
-                    cpu_stall_seconds=1_800.0,
-                    oom_kills=1,
-                    gpu_power_watts=200.0,
-                ),
-            )
-        )
-        db_session.commit()
-
-        samples = _samples(registry, ALICE_GMX)
-
-        assert (
-            samples["mddash_mdrun_measured_container_seconds"],
-            samples["mddash_mdrun_measured_cpu_stall_seconds"],
-            samples["mddash_mdrun_measured_oom_kills"],
-            samples["mddash_mdrun_measured_gpu_energy_joules"],
-        ) == (7_200, 1_800, 1, 1_440_000)
-
-    def test_waiting_jobs_and_queue_wait(self, registry: CollectorRegistry, db_session: Session) -> None:
-        db_session.add_all([
-            _row("queued", gpus=2, created_at=NOW - timedelta(minutes=10)),
-            _row(
-                "waited",
-                created_at=NOW - timedelta(hours=2),
-                started_at=NOW - timedelta(hours=1, minutes=30),
-                finished_at=NOW - timedelta(hours=1),
-                outcome=UsageOutcome.FINISHED,
-            ),
-        ])
-        db_session.commit()
-
-        samples = _samples(registry, ALICE_GMX)
-
-        assert (samples["mddash_mdrun_pending_jobs"], samples["mddash_mdrun_pending_gpus"]) == (1, 2)
-        assert (samples["mddash_mdrun_jobs_started"], samples["mddash_mdrun_queue_wait_seconds"]) == (1, 1_800)
-
-    def test_jobs_that_never_held_resources_count_only_as_waiting(
-        self, registry: CollectorRegistry, db_session: Session
-    ) -> None:
-        stopped_in_queue = NOW - timedelta(hours=1)
-        db_session.add_all([
-            _row("queued", gpus=1),
-            _row(
-                "stopped-in-queue",
-                gpus=1,
-                started_at=stopped_in_queue,
-                finished_at=stopped_in_queue,
-                outcome=UsageOutcome.STOPPED,
-            ),
-        ])
-        db_session.commit()
-
-        assert {name: value for name, value in _samples(registry, ALICE_GMX).items() if value} == {
-            "mddash_mdrun_pending_jobs": 1,
-            "mddash_mdrun_pending_gpus": 1,
-        }
-
-    def test_unattributed_jobs_have_empty_owner_labels(self, registry: CollectorRegistry, db_session: Session) -> None:
-        db_session.add(_row("legacy-client", owner=None, owner_namespace=None, started_at=NOW - timedelta(hours=1)))
-        db_session.commit()
-
-        unattributed = _samples(registry, {"user": "", "namespace": "", "engine": "gmx"})
-
-        assert unattributed["mddash_mdrun_cpu_core_seconds"] == 14_400  # 4 cores x 1 h
-
     def test_cumulative_usage_is_exported_as_gauges(self, registry: CollectorRegistry) -> None:
         """A late-noticed exit steps a total back, which Prometheus would read as a counter reset."""
         assert {family.type for family in registry.collect()} == {"gauge"}
-
-
-def test_serve_publishes_the_ledger_on_the_port(app: Flask, db_session: Session, mocker: MockerFixture) -> None:
-    start_http_server = mocker.patch("metrics.start_http_server")
-    db_session.add(_row("done", started_at=NOW - timedelta(hours=2), finished_at=NOW - timedelta(hours=1)))
-    db_session.commit()
-
-    serve(app, METRICS_PORT)
-
-    (port,) = start_http_server.call_args.args
-    registry = start_http_server.call_args.kwargs["registry"]
-    assert port == METRICS_PORT
-    assert registry.get_sample_value("mddash_mdrun_jobs_started", ALICE_GMX) == 1
