@@ -128,11 +128,11 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
   - `grafana` from `grafana-community` (the `grafana/helm-charts` copy is deprecated): no RBAC, no dashboard sidecar, no init-chown.
 - Neither pod mounts a ServiceAccount token, because every hub-namespace service account holds the hub's project role.
 - NetworkPolicies let only Grafana reach Prometheus and nothing reach Grafana. `kubectl port-forward` still reaches both.
-- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with 13 months of retention (`395d`). At this cardinality it stays small.
+- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with 13 months of retention (`395d`) and a size cap below the volume (`retentionSize`) as a backstop. At this cardinality (about 2,000 series, mostly the hub's and Prometheus' own) it stays under half the volume.
 - Grafana is stateless. Its datasource and dashboards are provisioned from `helm/charts/mddash/dashboards/*.json`. Anonymous Viewer with `viewers_can_edit` enables Explore.
 - Every container gets the e-INFRA hardening (non-root, seccomp `RuntimeDefault`, drop `ALL`) and explicit resources, and is added to `scripts/resource_summary.py`.
 - The "Usage by user" dashboard shows:
-  - a per-user table for the selected range (each total minus its value `offset $__range`; series that start inside the range count from zero);
+  - a per-user table for the selected range (each total minus its last value in the hour before the range start, which bridges a scrape gap there; series that start inside the range count from zero);
   - GPUs and CPU cores held over time, stacked by user;
   - jobs started by engine.
 - `make usage` keeps exact long-range accounting. Grafana ranges are bounded by Prometheus retention.
@@ -147,7 +147,7 @@ The platform gives tenants no utilization source (phase 0), so MDRun jobs measur
 - It logs a `mddash-usage` line every 60 s and a final one from the exit trap, which also runs after a stop. Every measuring command tolerates failure, and the exit trap still writes the S3 completion marker when measuring fails.
 - When MDRun closes the window (finish, error, stop, `DELETE`), it reads the last line from the simulation container's log before deleting the Job and stores it in `mdrun_usage_measured` (one row per job, never deleted). The hub's role already grants `pods/log`. A stop or `DELETE` removes the pod before its exit line, so those jobs keep the last periodic line, up to 60 s old.
 - Jobs started before this change, jobs that vanished, and logs without a line have no measurement. The values come from the job container, so like `owner` they are a client claim.
-- A job's measurement is weighed against its whole window and counts in the period where the job ended. `make usage` shows CPU used % and GPU busy % per user, and `JOBS=1` lists each job with its measurement, including peak memory and GPU memory.
+- A job's measurement is weighed against its whole window and counts in the period where the job ended. GPU utilization is sampled while the container runs, so the GPU counts as idle for the rest of the window. `make usage` shows CPU used % and GPU busy % per user, and `JOBS=1` lists each job with its measurement, including peak memory and GPU memory.
 - The exporter adds cumulative gauges in the same terms (`mddash_mdrun_measured_jobs`, `mddash_mdrun_measured_cpu_core_seconds_used` and `_allocated`, `mddash_mdrun_measured_gpu_seconds_busy` and `_allocated`), and the dashboard table divides them over the range.
 
 ### Job diagnostics (phase 2c)
@@ -156,7 +156,7 @@ The same lines and ledger explain why a job was slow, failed, or waited:
 
 - Queue wait is pod start minus submission, from the ledger. It counts for jobs that held resources, in the period where they started. The exporter adds `mddash_mdrun_queue_wait_seconds` (cumulative, so an average is its difference over the `jobs_started` difference) and the jobs and GPUs waiting right now (`mddash_mdrun_pending_jobs`, `mddash_mdrun_pending_gpus`).
 - Every `mddash-usage` line also carries the container's start time and clock, CPU throttling (`cpu.stat`), OOM kills (`memory.events`), pressure-stall "some" totals for CPU, memory, and I/O (`*.pressure`), and disk bytes (`io.stat`). GPU jobs add `nvidia-smi` power draw. These are running totals, so a stop keeps them at most 60 s old.
-- The exit line adds the engine's speed: GROMACS's last `Performance:` ns/day (`-cpi` runs append theirs to the same log) or pmemd's ns/day over all steps. Stopped runs have none, because the engine reports after MDRun has read the log.
+- The exit line adds the engine's speed: GROMACS's last `Performance:` ns/day (`-cpi` runs append theirs to the same log) or pmemd's ns/day over all steps. Stopped runs have none, because the engine reports after MDRun has read the log. Failed runs have none either: an appended log may still hold an earlier run's figure.
 - Startup (image pull and S3 download) is container start minus pod start. Stall and throttling are shares of the container's lifetime. A node without pressure accounting leaves the stall fields empty, and its jobs leave the stall denominator.
 - `mdrun_usage_measured` gains nullable columns for all of these. Phases 2b and 2c ship together, so production creates the table once with every column. Dev added them with `ALTER TABLE`, because `create_all` never alters an existing table.
 - `make usage` adds CPU stall %, OOM kills, GPU kWh, and average wait per user. `JOBS=1` adds wait, ns/day, CPU stall %, and OOM, and its CSV has every diagnostic. The exporter adds `mddash_mdrun_measured_container_seconds`, `_cpu_stall_seconds`, `_oom_kills`, and `_gpu_energy_joules`. The dashboard table divides them over the range, and a panel shows jobs waiting to start.
