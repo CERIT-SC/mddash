@@ -234,6 +234,7 @@ monitoring:
   enabled: false
   prometheus:
     retention: 395d  # 13 months, so a year-over-year view always has its start.
+    retentionSize: 1500MB  # Backstop below the volume: time retention alone does not bound the TSDB.
     storage:
       size: 2Gi
       # The TSDB needs a block-device-backed filesystem, not NFS.

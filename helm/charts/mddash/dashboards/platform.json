@@ -555,7 +555,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (handler) (increase(jupyterhub_request_duration_seconds_count{code=~\"5..\"}[$__interval]))",
+          "expr": "sum by (handler) ((increase(jupyterhub_request_duration_seconds_count{code=~\"5..\"}[$__interval]) and last_over_time(jupyterhub_request_duration_seconds_count{code=~\"5..\"}[10m] offset $__interval)) or (jupyterhub_request_duration_seconds_count{code=~\"5..\"} unless last_over_time(jupyterhub_request_duration_seconds_count{code=~\"5..\"}[10m] offset $__interval)))",
           "legendFormat": "{{handler}}",
           "range": true
         }

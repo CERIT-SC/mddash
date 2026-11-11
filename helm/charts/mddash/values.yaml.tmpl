@@ -494,6 +494,7 @@ prometheus:
     # Every hub-namespace service account holds the hub's project role. Prometheus needs no API access.
     automountServiceAccountToken: false
     retention: "{{ $mon.prometheus.retention }}"
+    retentionSize: "{{ $mon.prometheus.retentionSize }}"
     # Only the hub's metrics token: the hub Secret also holds its cookie secret and crypt keys.
     extraVolumes:
       - name: hub-metrics-token
