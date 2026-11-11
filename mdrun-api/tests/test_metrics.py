@@ -36,6 +36,7 @@ def _row(
     cpu_cores: int = 4,
     memory_gib: int = 4,
     gpus: int = 0,
+    created_at: datetime | None = None,
     started_at: datetime | None = None,
     finished_at: datetime | None = None,
     outcome: UsageOutcome | None = None,
@@ -50,7 +51,7 @@ def _row(
         cpu_cores=cpu_cores,
         memory_gib=memory_gib,
         gpus=gpus,
-        created_at=started_at or NOW,
+        created_at=created_at or started_at or NOW,
         started_at=started_at,
         finished_at=finished_at,
         outcome=outcome,
@@ -167,6 +168,63 @@ class TestLedgerCollector:
             "mddash_mdrun_measured_oom_kills": 0,
             "mddash_mdrun_measured_gpu_energy_joules": 0,
         }
+
+    def test_measured_jobs_report_their_diagnostics(self, registry: CollectorRegistry, db_session: Session) -> None:
+        container_start = NOW - timedelta(hours=3, minutes=55)
+        db_session.add(
+            _row(
+                "diagnosed",
+                gpus=1,
+                started_at=NOW - timedelta(hours=4),
+                finished_at=NOW - timedelta(hours=1),
+                outcome=UsageOutcome.FINISHED,
+                # The container ran 2 h with tasks waiting for CPU for 30 min, on one GPU half busy drawing 200 W.
+                measurement=MdrunUsageMeasurement(
+                    job_id="diagnosed",
+                    cpu_core_seconds=3_600.0,
+                    gpu_utilization=50.0,
+                    complete=True,
+                    container_started_at=container_start,
+                    measured_at=container_start + timedelta(hours=2),
+                    cpu_stall_seconds=1_800.0,
+                    oom_kills=1,
+                    gpu_power_watts=200.0,
+                ),
+            )
+        )
+        db_session.commit()
+
+        samples = _samples(registry, ALICE_GMX)
+
+        assert (
+            samples["mddash_mdrun_measured_container_seconds"],
+            samples["mddash_mdrun_measured_cpu_stall_seconds"],
+            samples["mddash_mdrun_measured_oom_kills"],
+            samples["mddash_mdrun_measured_gpu_energy_joules"],
+        ) == (7_200, 1_800, 1, 1_440_000)
+        # The GPU idled outside the container's 2 h: 1 h busy of the 3 h window.
+        assert (
+            samples["mddash_mdrun_measured_gpu_seconds_busy"],
+            samples["mddash_mdrun_measured_gpu_seconds_allocated"],
+        ) == (3_600, 10_800)
+
+    def test_waiting_jobs_and_queue_wait(self, registry: CollectorRegistry, db_session: Session) -> None:
+        db_session.add_all([
+            _row("queued", gpus=2, created_at=NOW - timedelta(minutes=10)),
+            _row(
+                "waited",
+                created_at=NOW - timedelta(hours=2),
+                started_at=NOW - timedelta(hours=1, minutes=30),
+                finished_at=NOW - timedelta(hours=1),
+                outcome=UsageOutcome.FINISHED,
+            ),
+        ])
+        db_session.commit()
+
+        samples = _samples(registry, ALICE_GMX)
+
+        assert (samples["mddash_mdrun_pending_jobs"], samples["mddash_mdrun_pending_gpus"]) == (1, 2)
+        assert (samples["mddash_mdrun_jobs_started"], samples["mddash_mdrun_queue_wait_seconds"]) == (1, 1_800)
 
     def test_cumulative_usage_is_exported_as_gauges(self, registry: CollectorRegistry) -> None:
         """A late-noticed exit steps a total back, which Prometheus would read as a counter reset."""

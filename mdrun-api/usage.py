@@ -205,13 +205,15 @@ def measured_seconds(record: MdrunUsage, now: datetime) -> MeasuredSeconds | Non
     used = measurement.cpu_core_seconds
     utilization = measurement.gpu_utilization if record.gpus else None
     lifetime = container_seconds(measurement)
+    # GPU utilization is sampled while the container runs; the GPU idles for the rest of the window.
+    sampled = seconds if lifetime is None else min(lifetime, seconds)
     stalled = measurement.cpu_stall_seconds if lifetime else None
     power = measurement.gpu_power_watts if record.gpus and lifetime else None
     return MeasuredSeconds(
         cpu_core_seconds_allocated=0.0 if used is None else record.cpu_cores * seconds,
         cpu_core_seconds_used=used or 0.0,
         gpu_seconds_allocated=0.0 if utilization is None else record.gpus * seconds,
-        gpu_seconds_busy=0.0 if utilization is None else record.gpus * seconds * utilization / 100,
+        gpu_seconds_busy=0.0 if utilization is None else record.gpus * sampled * utilization / 100,
         stall_window_seconds=0.0 if stalled is None else lifetime or 0.0,
         cpu_stall_seconds=stalled or 0.0,
         oom_kills=measurement.oom_kills,

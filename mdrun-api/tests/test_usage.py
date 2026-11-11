@@ -1,7 +1,7 @@
 """Tests for the per-user usage ledger and the report built from it."""
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import MagicMock
@@ -426,8 +426,14 @@ def _record(
     memory: int = 8,
     gpus: int = 0,
     used: tuple[float | None, float | None] | None = None,
+    submitted: datetime | None = None,
+    diagnostics: dict[str, Any] | None = None,
 ) -> MdrunUsage:
-    """Build a ledger record; ``used`` is its measured (CPU core-seconds, GPU utilization %)."""
+    """
+    Build a ledger record; ``used`` is its measured (CPU core-seconds, GPU utilization %).
+
+    ``submitted`` defaults to the start; ``diagnostics`` adds measured fields.
+    """
     job_id = f"{owner}-{start}"
     record = MdrunUsage(
         job_id=job_id,
@@ -438,7 +444,7 @@ def _record(
         cpu_cores=cpu,
         memory_gib=memory,
         gpus=gpus,
-        created_at=start or OCT_1,
+        created_at=submitted or start or OCT_1,
         started_at=start,
         finished_at=end,
     )
@@ -450,6 +456,7 @@ def _record(
             gpu_utilization=used[1],
             gpu_memory_peak_gib=6.0 if used[1] is not None else None,
             complete=True,
+            **(diagnostics or {}),
         )
     return record
 
@@ -545,6 +552,58 @@ class TestSummarize:
 
         assert row.cpu_used_percent == pytest.approx(100 * 20 / 48)  # 16 + 4 of 32 + 16 core-h
         assert row.gpu_busy_percent == pytest.approx(75.0)
+
+    def test_queue_wait_averages_jobs_that_started_in_the_period(self) -> None:
+        start = datetime(2026, 10, 2, 10, tzinfo=UTC)
+        stopped_in_queue = datetime(2026, 10, 2, 12, tzinfo=UTC)
+        records = [
+            _record("alice", start, start + timedelta(hours=1), submitted=start - timedelta(minutes=30)),
+            _record("alice", start + timedelta(hours=2), None, submitted=start + timedelta(hours=1, minutes=50)),
+            # Never held resources: stopped while still waiting.
+            _record("alice", stopped_in_queue, stopped_in_queue, submitted=start),
+            # Started in September, so its wait counts there.
+            _record(
+                "alice",
+                datetime(2026, 9, 30, 23, tzinfo=UTC),
+                datetime(2026, 10, 1, 1, tzinfo=UTC),
+                submitted=datetime(2026, 9, 30, 20, tzinfo=UTC),
+            ),
+        ]
+
+        [row] = summarize(records, since=OCT_1, until=NOV_1, now=start + timedelta(hours=3))
+
+        assert row.avg_queue_wait_minutes == pytest.approx(20.0)
+
+    def test_diagnostics_cover_measured_jobs_that_ended_in_the_period(self) -> None:
+        start = datetime(2026, 10, 2, tzinfo=UTC)
+        container_start = start + timedelta(minutes=5)
+        records = [
+            # The container ran 2 h with tasks waiting for CPU for 30 min, on one GPU half busy drawing 200 W.
+            _record(
+                "alice",
+                start,
+                start + timedelta(hours=2, minutes=10),
+                gpus=1,
+                used=(14_400, 50.0),
+                diagnostics={
+                    "container_started_at": container_start,
+                    "measured_at": container_start + timedelta(hours=2),
+                    "cpu_stall_seconds": 1_800.0,
+                    "oom_kills": 1,
+                    "gpu_power_watts": 200.0,
+                },
+            ),
+            # Measured before the container reported stall time and OOM kills.
+            _record("alice", start + timedelta(hours=3), start + timedelta(hours=4), used=(3_600, None)),
+        ]
+
+        [row] = summarize(records, since=OCT_1, until=NOV_1, now=NOV_1)
+
+        assert row.cpu_stall_percent == pytest.approx(25.0)
+        assert row.measured_oom_kills == 1
+        assert row.gpu_energy_kwh == pytest.approx(0.4)
+        # The GPU idled through the image pull and the upload: 1 h busy of a 2 h 10 min window.
+        assert row.gpu_busy_percent == pytest.approx(100 * 60 / 130)
 
 
 class TestEstimatedCost:
