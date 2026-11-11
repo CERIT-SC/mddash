@@ -186,8 +186,9 @@ class MdrunJob(db.Model):  # type: ignore
             return
 
         # Kubernetes first: the writes below hold SQLite's write lock until the caller commits.
-        start, end = k8s_client.get_pod_times(ns=NAMESPACE, name=self.job_name)
-        measured = None if outcome is None else k8s_client.get_measured_usage(ns=NAMESPACE, name=self.job_name)
+        pod = k8s_client.get_job_pod(ns=NAMESPACE, name=self.job_name)
+        start, end = k8s_client.get_pod_times(pod)
+        measured = None if outcome is None else k8s_client.get_measured_usage(ns=NAMESPACE, name=self.job_name, pod=pod)
         now = datetime.now(UTC)
         window = update(MdrunUsage).where(MdrunUsage.job_id == self.id).execution_options(synchronize_session=False)
         db.session.execute(window.where(MdrunUsage.started_at.is_(None)).values(started_at=start or now))

@@ -16,7 +16,7 @@ from kubernetes.client.rest import ApiException
 from urllib3.exceptions import HTTPError
 
 if TYPE_CHECKING:
-    from kubernetes.client import V1Job
+    from kubernetes.client import V1Job, V1Pod
 
 
 logger = logging.getLogger(__name__)
@@ -49,8 +49,9 @@ USAGE_INTERVAL_SECONDS = 60
 _USAGE_PREFIX = "mddash-usage "
 # Enough to reach back one interval past chatty simulation output.
 _USAGE_LOG_TAIL_LINES = 2000
-# Stop, DELETE, and status reads wait on the log read.
-_USAGE_LOG_TIMEOUT_SECONDS = 10
+# Stop, DELETE, and status reads wait on the log read. urllib3 retries a timeout three times, so they
+# wait up to four times this, which must stay within the dashboard's 10 s for a stop.
+_USAGE_LOG_TIMEOUT_SECONDS = 2
 # Largest accepted field values: SQLite's INTEGER limit, and datetime's last second for timestamps.
 _MAX_USAGE_VALUE = 2**63 - 1
 _MAX_USAGE_EPOCH = 253_402_300_799
@@ -250,8 +251,14 @@ def _usage_block(
         "done &",
         "MDDASH_SAMPLER=$!",
         "mddash_usage_final() {",
+        # A failed run never reached its own report, and its log may hold an earlier run's.
+        "    local failed=$?",
+        # The sampler's sleep would outlive it.
+        '    pkill -P "$MDDASH_SAMPLER" 2>/dev/null || true',
         '    kill "$MDDASH_SAMPLER" 2>/dev/null || true',
-        f'    mddash_usage 1 "$({performance} 2>/dev/null || true)"' if performance else "    mddash_usage 1",
+        f'    mddash_usage 1 "$([ "$failed" -ne 0 ] || {performance} 2>/dev/null || true)"'
+        if performance
+        else "    mddash_usage 1",
         "}",
     ]
     return "\n".join(lines)
@@ -644,21 +651,26 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
         return False
 
 
-def get_pod_times(ns: str, name: str) -> tuple[datetime | None, datetime | None]:
+def get_job_pod(ns: str, name: str) -> "V1Pod | None":
+    """Find the job's pod; None without a readable one."""
+    try:
+        pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
+    except ApiException:
+        return None
+    return pods.items[0] if pods.items else None
+
+
+def get_pod_times(pod: "V1Pod | None") -> tuple[datetime | None, datetime | None]:
     """
     Allocation window of a job's pod: kubelet acceptance until its last container exits.
 
     Returns:
-        ``(start, end)``; ``end`` is None while any container runs, both are None without a readable pod.
+        ``(start, end)``; ``end`` is None while any container runs, both are None without a pod.
     """
-    try:
-        pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
-    except ApiException:
-        return None, None
-    if not pods.items:
+    if pod is None:
         return None, None
 
-    status = pods.items[0].status
+    status = pod.status
     containers = status.container_statuses or []
     exits = [c.state.terminated.finished_at for c in containers if c.state and c.state.terminated]
     if containers and len(exits) == len(containers) and all(exits):
@@ -737,15 +749,14 @@ def parse_usage_line(line: str, job: str) -> MeasuredUsage | None:
     )
 
 
-def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
+def get_measured_usage(ns: str, name: str, pod: "V1Pod | None") -> MeasuredUsage | None:
     """Latest measurement the job's simulation container logged; None on any read failure, never an error."""
+    if pod is None:
+        return None
     try:
-        pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
-        if not pods.items:
-            return None
         # Raw bytes: kubernetes 36 returns a preloaded text/plain body as the repr of its bytes.
         response = core_v1.read_namespaced_pod_log(
-            name=pods.items[0].metadata.name,
+            name=pod.metadata.name,
             namespace=ns,
             container=name,
             tail_lines=_USAGE_LOG_TAIL_LINES,
@@ -758,8 +769,9 @@ def get_measured_usage(ns: str, name: str) -> MeasuredUsage | None:
             response.release_conn()
     except (ApiException, HTTPError):
         return None
-    latest = next((line for line in reversed(log.splitlines()) if line.startswith(_USAGE_PREFIX)), None)
-    return None if latest is None else parse_usage_line(latest, name)
+    # The kubelet joins a line onto unterminated output before it, such as `mdrun -v` progress.
+    latest = next((line for line in reversed(log.splitlines()) if _USAGE_PREFIX in line), None)
+    return None if latest is None else parse_usage_line(latest[latest.rindex(_USAGE_PREFIX) :], name)
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:
