@@ -228,3 +228,29 @@ tuner:
       requests:
         cpu: "2"  # Should be same as limit.
         memory: "16Gi"
+
+# Per-user usage dashboards: Prometheus + Grafana in the hub namespace. `make grafana` opens them.
+monitoring:
+  enabled: false
+  prometheus:
+    retention: 395d  # 13 months, so a year-over-year view always has its start.
+    retentionSize: 1500MB  # Backstop below the volume: time retention alone does not bound the TSDB.
+    storage:
+      size: 2Gi
+      # The TSDB needs a block-device-backed filesystem, not NFS.
+      storageClassName: csi-ceph-rbd-du
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "50m"
+        memory: "256Mi"
+  grafana:
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "50m"
+        memory: "128Mi"

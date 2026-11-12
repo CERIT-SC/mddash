@@ -75,6 +75,9 @@ validate-charts: ## Lint and template all charts for every environment. Requires
 		helm lint helm/charts/$$chart; \
 		helm template $$chart helm/charts/$$chart >/dev/null; \
 	done
+	@for dashboard in helm/charts/mddash/dashboards/*.json; do \
+		yq -p json -o json -e '.panels' "$$dashboard" >/dev/null || { echo "invalid dashboard: $$dashboard" >&2; exit 1; }; \
+	done
 	$(MAKE) -C helm update-deps ENV=dev IMAGE_TAG=dev
 	@for env in dev prod edc; do \
 		$(MAKE) -C helm render ENV=$$env IMAGE_TAG=dev; \
@@ -295,9 +298,23 @@ resources: ## Show offline resource budget and recommended namespace quota value
 	@python3 scripts/resource_summary.py $(config)
 
 .PHONY: usage
-usage: ## Show per-user MDRun usage. Optional: SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD CSV=1
+usage: ## Show per-user MDRun usage. Optional: SINCE=YYYY-MM-DD UNTIL=YYYY-MM-DD JOBS=1 (per job) CSV=1
 	@kubectl -n "$(namespace)" exec deploy/mdrun-api -c mdrun-api -- \
-		python -m usage $(if $(SINCE),--since "$(SINCE)") $(if $(UNTIL),--until "$(UNTIL)") $(if $(CSV),--csv)
+		python -m usage $(if $(SINCE),--since "$(SINCE)") $(if $(UNTIL),--until "$(UNTIL)") \
+		$(if $(JOBS),--jobs) $(if $(CSV),--csv)
+
+.PHONY: grafana
+grafana: ## Serve the Grafana dashboards on http://localhost:3000 (needs monitoring.enabled)
+	@set -euo pipefail; \
+	[[ "$$(yq -r '.monitoring.enabled' $(config))" == true ]] || { echo "No Grafana for ENV=$(ENV): monitoring.enabled is off in $(config)" >&2; exit 1; }; \
+	kubectl -n "$(namespace)" port-forward svc/grafana 3000:80 | { \
+		trap '' INT; \
+		read -r _ || exit 0; \
+		echo "Grafana for $(namespace) (Ctrl+C to stop):"; \
+		yq -p json -o tsv '[.title, .uid]' helm/charts/mddash/dashboards/*.json | \
+			while IFS=$$'\t' read -r title uid; do printf '  %-14s http://localhost:3000/d/%s\n' "$$title" "$$uid"; done; \
+		cat >/dev/null; \
+	}
 
 # Rollback
 

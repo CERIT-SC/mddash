@@ -18,6 +18,12 @@ gunicorn:
   workers: 2
   threads: 4
 
+metrics:
+  # Per-user series from the poller; a NetworkPolicy admits only pods matching prometheusPodLabels.
+  enabled: false
+  port: 9100
+  prometheusPodLabels: {}
+
 polling:
   # Poller runs as a sidecar in this pod, sharing the /data PVC.
   intervalSeconds: 900

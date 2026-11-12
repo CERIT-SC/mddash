@@ -11,7 +11,7 @@ Today nothing can answer "who used what". MDRun and Tuner jobs run in the hub na
 The services therefore record usage themselves, and Grafana reads it:
 
 1. **Usage ledger (MDRun).** An append-only `mdrun_usage` table records owner, requested resources, and allocation start/end per job, and is never deleted. `make usage` prints per-user CPU-hours, GPU-hours, and estimated cost for any period.
-2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived counters on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`.
+2. **Prometheus + Grafana** (opt-in, `monitoring.enabled`), as subcharts in the hub namespace. Services export ledger-derived totals on a dedicated port, Grafana ships a provisioned "Usage by user" dashboard, and access is via `kubectl port-forward`. MDRun jobs also measure how much of their allocation they used.
 3. **Tuner ledger**, with the same shape per trial.
 4. **User namespaces** (notebooks, GPU notebooks, analysis) via a collector of our own, because phase 0 found CERIT's `project-stats` exporter unusable without extra RBAC.
 
@@ -83,6 +83,7 @@ G3 ships in phase 1 regardless, and G1 builds on it in phase 2. G2 serves only a
   - `stop()`/`DELETE` close at request time;
   - a job that disappears from Kubernetes while non-terminal closes when first seen missing (error ≤ one poll interval).
 - Usage is requested CPU cores, memory GiB, and GPUs × window. Reports clip windows to the requested period, so a job that spans two months splits correctly.
+- Measured usage (phase 2b) shows how much of an allocation a job used. It never replaces allocation in cost.
 - Cost is usage × the `tuner.api.pricing` rates, shown as an estimate.
 - Jobs created before the deploy have no ledger row, and the write points skip them. There is no backfill.
 
@@ -113,25 +114,52 @@ The report is `python -m usage --since … [--until …] [--csv]`, run inside th
 
 ### Metrics exporter (phase 2)
 
-- The poller container serves `/metrics` on port 9100 with `prometheus_client`. A custom collector queries the ledger at scrape time, so counters survive restarts and gunicorn multiprocess mode is unnecessary.
+- The poller container serves `/metrics` on `METRICS_PORT` (9100) with `prometheus_client`. A custom collector recomputes every series from the ledger at scrape time, so values survive restarts and gunicorn multiprocess mode is unnecessary. It shares the window rules with `make usage` (`usage.allocated_seconds`).
+- Cumulative usage is a gauge, not a counter. A window closes at the container's exit, which MDRun can notice after a scrape already counted the job as running, so the total can step back by up to that delay. Prometheus reads any counter decrease as a reset and would count the whole total again. Usage over a period is the value at its end minus the value at its start (`x - x offset d`), never `rate()` or `increase()`.
 - A NetworkPolicy keeps port 5000 open as today and admits 9100 only from the Prometheus pod. Usernames do not leave the hub namespace.
-- Series carry the labels `user`, `namespace`, and `engine`. Cardinality is tens of users.
-  - Counters: `mddash_mdrun_jobs_started_total`, `mddash_mdrun_cpu_core_seconds_total`, `mddash_mdrun_gpu_seconds_total`, `mddash_mdrun_memory_gib_seconds_total`.
-  - Gauges: `mddash_mdrun_allocated_cpu_cores`, `mddash_mdrun_allocated_gpus`.
+- Series carry the labels `user`, `namespace`, and `engine`. Unattributed jobs have empty `user` and `namespace`. Cardinality is tens of users.
+  - Cumulative: `mddash_mdrun_jobs_started`, `mddash_mdrun_cpu_core_seconds`, `mddash_mdrun_gpu_seconds`, `mddash_mdrun_memory_gib_seconds`.
+  - Held by running jobs: `mddash_mdrun_allocated_cpu_cores`, `mddash_mdrun_allocated_gpus`, `mddash_mdrun_allocated_memory_gib`.
 
 ### Monitoring stack (phase 2)
 
 - `monitoring.enabled` in `config*.yaml` gates two subcharts. Enable on dev first.
-  - `prometheus-community/prometheus`: server only (no Alertmanager, kube-state-metrics, node-exporter, pushgateway, or configmap-reload), `rbac.create: false`, static scrape targets.
-  - `grafana/grafana`: no RBAC, no dashboard sidecar, no init-chown.
-- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with ~13 months of retention. At this cardinality it stays small.
+  - `prometheus-community/prometheus`: server only (no Alertmanager, kube-state-metrics, node-exporter, or pushgateway), `rbac.create: false`, and static scrape targets (itself and `mdrun-api:9100`) with the chart's discovery jobs off. The config reloader stays, with explicit resources, so a scrape-config change applies on `helm upgrade` without a restart.
+  - `grafana` from `grafana-community` (the `grafana/helm-charts` copy is deprecated): no RBAC, no dashboard sidecar, no init-chown.
+- Neither pod mounts a ServiceAccount token, because every hub-namespace service account holds the hub's project role.
+- NetworkPolicies let only Grafana reach Prometheus and nothing reach Grafana. `kubectl port-forward` still reaches both.
+- Prometheus TSDB lives on a `csi-ceph-rbd-du` PVC, with 13 months of retention (`395d`) and a size cap below the volume (`retentionSize`) as a backstop. At this cardinality (about 2,000 series, mostly the hub's and Prometheus' own) it stays under half the volume.
 - Grafana is stateless. Its datasource and dashboards are provisioned from `helm/charts/mddash/dashboards/*.json`. Anonymous Viewer with `viewers_can_edit` enables Explore.
 - Every container gets the e-INFRA hardening (non-root, seccomp `RuntimeDefault`, drop `ALL`) and explicit resources, and is added to `scripts/resource_summary.py`.
 - The "Usage by user" dashboard shows:
-  - a per-user table for the selected range (`increase(…[$__range])`);
-  - allocated GPUs and CPUs over time, stacked by user;
+  - a per-user table for the selected range (each total minus its last value in the hour before the range start, which bridges a scrape gap there; series that start inside the range count from zero);
+  - GPUs and CPU cores held over time, stacked by user;
   - jobs started by engine.
 - `make usage` keeps exact long-range accounting. Grafana ranges are bounded by Prometheus retention.
+- Prometheus also scrapes the hub's `/hub/metrics`. A JupyterHub service `prometheus` holds the `read:metrics` scope, and z2jh generates its token and keeps it in the hub Secret. The Prometheus pod projects only that key, because the Secret also holds the hub's cookie secret and crypt keys. The hub has no NetworkPolicy, and the monitoring policies restrict ingress only.
+- A "Platform" dashboard shows active users (24 h, 7 d, 30 d), running servers, spawn time and outcomes, and hub API latency and server errors. These series carry no usernames.
+
+### Measured usage (phase 2b)
+
+The platform gives tenants no utilization source (phase 0), so MDRun jobs measure themselves:
+
+- The simulation container's script reads its own cgroup v2 counters (`cpu.stat` `usage_usec` and `memory.peak`). Only GPU jobs also sample `nvidia-smi` for utilization and memory used, because a CPU job on a GPU node may see GPUs that belong to other jobs.
+- It logs a `mddash-usage` line every 60 s and a final one from the exit trap, which also runs after a stop. Every measuring command tolerates failure, and the exit trap still writes the S3 completion marker when measuring fails.
+- When MDRun closes the window (finish, error, stop, `DELETE`), it reads the last line from the simulation container's log before deleting the Job and stores it in `mdrun_usage_measured` (one row per job, never deleted). The hub's role already grants `pods/log`. A stop or `DELETE` removes the pod before its exit line, so those jobs keep the last periodic line, up to 60 s old.
+- Jobs started before this change, jobs that vanished, and logs without a line have no measurement. The values come from the job container, so like `owner` they are a client claim.
+- A job's measurement is weighed against its whole window and counts in the period where the job ended. GPU utilization is sampled while the container runs, so the GPU counts as idle for the rest of the window. `make usage` shows CPU used % and GPU busy % per user, and `JOBS=1` lists each job with its measurement, including peak memory and GPU memory.
+- The exporter adds cumulative gauges in the same terms (`mddash_mdrun_measured_jobs`, `mddash_mdrun_measured_cpu_core_seconds_used` and `_allocated`, `mddash_mdrun_measured_gpu_seconds_busy` and `_allocated`), and the dashboard table divides them over the range.
+
+### Job diagnostics (phase 2c)
+
+The same lines and ledger explain why a job was slow, failed, or waited:
+
+- Queue wait is pod start minus submission, from the ledger. It counts for jobs that held resources, in the period where they started. The exporter adds `mddash_mdrun_queue_wait_seconds` (cumulative, so an average is its difference over the `jobs_started` difference) and the jobs and GPUs waiting right now (`mddash_mdrun_pending_jobs`, `mddash_mdrun_pending_gpus`).
+- Every `mddash-usage` line also carries the container's start time and clock, CPU throttling (`cpu.stat`), OOM kills (`memory.events`), pressure-stall "some" totals for CPU, memory, and I/O (`*.pressure`), and disk bytes (`io.stat`). GPU jobs add `nvidia-smi` power draw. These are running totals, so a stop keeps them at most 60 s old.
+- The exit line adds the engine's speed: GROMACS's last `Performance:` ns/day (`-cpi` runs append theirs to the same log) or pmemd's ns/day over all steps. Stopped runs have none, because the engine reports after MDRun has read the log. Failed runs have none either: an appended log may still hold an earlier run's figure.
+- Startup (image pull and S3 download) is container start minus pod start. Stall and throttling are shares of the container's lifetime. A node without pressure accounting leaves the stall fields empty, and its jobs leave the stall denominator.
+- `mdrun_usage_measured` gains nullable columns for all of these. Phases 2b and 2c ship together, so production creates the table once with every column. Dev added them with `ALTER TABLE`, because `create_all` never alters an existing table.
+- `make usage` adds CPU stall %, OOM kills, GPU kWh, and average wait per user. `JOBS=1` adds wait, ns/day, CPU stall %, and OOM, and its CSV has every diagnostic. The exporter adds `mddash_mdrun_measured_container_seconds`, `_cpu_stall_seconds`, `_oom_kills`, and `_gpu_energy_joules`. The dashboard table divides them over the range, and a panel shows jobs waiting to start.
 
 ### Tuner (phase 3)
 
@@ -160,6 +188,8 @@ Ask CERIT about `pod-banking` first: if it already records per-namespace usage, 
 | 0. Platform spike (parallel, no code) | S | Check for `monitoring.coreos.com` CRDs. Install Personal Monitoring in `mddash-dev` and record which namespaces and GPU requests `project-stats` reports, then uninstall. Ask CERIT about reusing `project-stats` and about `pod-banking` data. | Findings recorded in this spec. Phase 4 go/no-go. |
 | 1. MDRun ledger + report | M | Owner fields (dashboard MDRun client, gmx submit/extend, amber submit, demo fakes). Schema and sanitization. Labels. `mdrun_usage` model and write points. Pod-time helper in `k8s_client`. Pricing env on mdrun-api. `usage` CLI and `make usage`. Docs (`mdrun-api/AGENTS.md`, root `AGENTS.md`). | Unit tests for each write point, window clipping, unattributed rows, and old-client payloads. On dev, run a short job: `make usage ENV=dev` shows it, and `kubectl get pods -l mddash.io/workload=mdrun` shows the labels. |
 | 2. Prometheus + Grafana | M | Exporter on the poller. NetworkPolicy. Subcharts behind `monitoring.enabled`. Dashboard JSON. `make grafana`. `resource_summary.py`. `docs/deployment.md`, `docs/resource-management.md`. | `make validate-charts`. On dev: Prometheus target up, and the dashboard matches `make usage` for the same range. |
+| 2b. Measured usage | M | Self-measurement in the GROMACS and AMBER scripts. `mdrun_usage_measured`, read from the job log at close. Report columns and `JOBS=1`. Measured gauges and dashboard columns. | Unit tests run the sampler in bash against fake cgroup files and a fake `nvidia-smi`. On dev, a finished CPU job and a finished GPU job show measured values in `make usage JOBS=1`. |
+| 2c. Job diagnostics | S-M | Queue wait and pending jobs from the ledger. Throttling, OOM kills, pressure stall, disk I/O, GPU power, and container start on the job lines, plus the engine's ns/day on the exit line. Columns, report, exporter, dashboard. | Unit tests run the sampler against fake cgroup, pressure, and I/O files, a fake `nvidia-smi` with power, and engine logs. On dev, a stopped CPU job and its Extend show the diagnostics in `make usage JOBS=1` and Grafana. |
 | 3. Tuner ledger | S-M | Form fields, trial timing, migration, exporter, panels. | Unit and migration tests. `make -C tuner e2e ENV=dev` produces a job that appears in `make usage` and Grafana. |
 | 4. Namespace usage | S-M | Collector for per-namespace requests (and usage once RBAC allows), scrape config, panels. | A dev user namespace and the Tuner worker appear in Grafana. |
 
@@ -168,9 +198,9 @@ Every phase passes `make fix`, `make type-check`, `make knip`, `make test`, and 
 ## Open decisions
 
 1. Ledger first (A, with G3 then G1), or Personal Monitoring (G2) only.
-2. Grafana access: port-forward to start, or SSO ingress from day one.
+2. Grafana access: port-forward to start (phase 2 ships this), or SSO ingress from day one.
 3. Pricing: reuse `tuner.api.pricing` for MDRun estimates as is, or promote it to a top-level `pricing` key.
-4. Retention of per-user usage data: keep the ledger indefinitely? Keep Prometheus for 13 months?
+4. Retention of per-user usage data: keep the ledger indefinitely? Keep Prometheus for 13 months (phase 2 ships this)?
 5. Trust model: accept a client-asserted `owner` now, and track per-user authentication for MDRun/Tuner as a separate security issue.
 
 ## Non-goals
@@ -180,5 +210,5 @@ Every phase passes `make fix`, `make type-check`, `make knip`, `make test`, and 
 - User-facing usage views.
 - Alerting.
 - Log aggregation.
-- Measured utilization (cAdvisor, DCGM).
+- Cluster-level measured utilization (cAdvisor, DCGM). MDRun jobs measure themselves instead.
 - Backfilling historical jobs.
