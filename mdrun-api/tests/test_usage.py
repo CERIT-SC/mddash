@@ -11,10 +11,12 @@ from enums import JobStatus, UsageOutcome
 from extensions import db
 from flask.testing import FlaskClient
 from k8s_client import MeasuredUsage
+from kubernetes.client.rest import ApiException
 from models import MdrunJob, MdrunUsage, MdrunUsageMeasurement
 from pytest_mock import MockerFixture
 from sqlalchemy import update
 from sqlalchemy.orm import Session
+from urllib3.exceptions import ProtocolError
 from usage import estimated_cost, main, summarize
 
 POD_START = datetime(2026, 10, 1, 8, 0, tzinfo=UTC)
@@ -289,6 +291,113 @@ class TestAllocationWindow:
         assert response.get_json()["status"] == "finished"
         mock_k8s_client["delete_job"].assert_called_once()
         assert db_session.query(MdrunUsage).count() == 0
+
+
+class TestKubernetesApiErrors:
+    """A Kubernetes API error is not a job outcome: the row and the ledger change only when the Job is read or deleted."""
+
+    def _running(self, client: FlaskClient, mock_k8s_client: dict[str, Any], pod_times: MagicMock) -> str:
+        job_id = _submit(client)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
+        pod_times.return_value = (POD_START, None)
+        client.get(f"/api/jobs/gmx/{job_id}")
+        return job_id
+
+    def _assert_still_running(self, db_session: Session, job_id: str) -> None:
+        job = db_session.get(MdrunJob, job_id)
+        assert job is not None
+        assert job.last_status == JobStatus.RUNNING
+        record = _usage(db_session, job_id)
+        assert (record.finished_at, record.outcome) == (None, None)
+
+    def test_failed_status_read_leaves_the_job_running(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
+    ) -> None:
+        job_id = self._running(client, mock_k8s_client, pod_times)
+        mock_k8s_client["get_job_status"].side_effect = ApiException(status=503)
+
+        response = client.get(f"/api/jobs/gmx/{job_id}")
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        self._assert_still_running(db_session, job_id)
+        mock_k8s_client["delete_job"].assert_not_called()
+
+    def test_failed_status_read_stops_nothing(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
+    ) -> None:
+        job_id = self._running(client, mock_k8s_client, pod_times)
+        mock_k8s_client["get_job_status"].side_effect = ApiException(status=503)
+
+        response = client.post(f"/api/jobs/gmx/{job_id}/stop")
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        self._assert_still_running(db_session, job_id)
+        mock_k8s_client["delete_job"].assert_not_called()
+
+    @pytest.mark.parametrize(("method", "suffix"), [("POST", "/stop"), ("DELETE", "")])
+    def test_failed_job_delete_leaves_the_job_running(
+        self,
+        client: FlaskClient,
+        db_session: Session,
+        mock_k8s_client: dict[str, Any],
+        pod_times: MagicMock,
+        method: str,
+        suffix: str,
+    ) -> None:
+        job_id = self._running(client, mock_k8s_client, pod_times)
+        mock_k8s_client["delete_job"].side_effect = ApiException(status=503)
+
+        response = client.open(f"/api/jobs/gmx/{job_id}{suffix}", method=method)
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        self._assert_still_running(db_session, job_id)
+
+    @pytest.mark.parametrize("error", [ApiException(status=503), ProtocolError("reset")])
+    def test_stop_survives_an_unreadable_outcome(
+        self,
+        client: FlaskClient,
+        db_session: Session,
+        mock_k8s_client: dict[str, Any],
+        pod_times: MagicMock,
+        error: Exception,
+    ) -> None:
+        job_id = self._running(client, mock_k8s_client, pod_times)
+        # First read (guard): running; outcome re-read after the delete: unreadable.
+        mock_k8s_client["get_job_status"].side_effect = [JobStatus.RUNNING, error]
+
+        response = client.post(f"/api/jobs/gmx/{job_id}/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        mock_k8s_client["delete_job"].assert_called_once()
+        job = db_session.get(MdrunJob, job_id)
+        assert job is not None
+        assert job.last_status == JobStatus.STOPPED
+        assert _usage(db_session, job_id).outcome == UsageOutcome.STOPPED
+
+    @pytest.mark.parametrize(
+        ("status", "outcome"),
+        [(JobStatus.FINISHED, UsageOutcome.FINISHED), (JobStatus.ERROR, UsageOutcome.ERROR)],
+    )
+    def test_failed_cleanup_keeps_the_observed_outcome(
+        self,
+        client: FlaskClient,
+        db_session: Session,
+        mock_k8s_client: dict[str, Any],
+        pod_times: MagicMock,
+        status: JobStatus,
+        outcome: UsageOutcome,
+    ) -> None:
+        job_id = _submit(client)
+        mock_k8s_client["get_job_status"].return_value = status
+        mock_k8s_client["delete_job"].side_effect = ApiException(status=503)
+
+        response = client.get(f"/api/jobs/gmx/{job_id}")
+
+        assert response.get_json()["status"] == status.value
+        job = db_session.get(MdrunJob, job_id)
+        assert job is not None
+        assert job.last_status == status
+        assert _usage(db_session, job_id).outcome == outcome
 
 
 class TestMeasuredUsage:

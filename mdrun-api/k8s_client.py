@@ -599,19 +599,26 @@ def create_amber_job(
 
 
 def delete_job(ns: str, name: str, grace_period_seconds: int = 5) -> None:
-    """Delete a Kubernetes job by name."""
-    if not ping_resource("job", name, ns):
+    """
+    Delete a Kubernetes job by name; a missing job is a no-op.
+
+    Raises:
+        ApiException: Any other API error. The job may still run, so callers must not record it gone.
+    """
+    try:
+        batch_v1.delete_namespaced_job(
+            name=name,
+            namespace=ns,
+            body=client.V1DeleteOptions(
+                propagation_policy="Background",
+                grace_period_seconds=grace_period_seconds,
+            ),
+        )
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
-
-    batch_v1.delete_namespaced_job(
-        name=name,
-        namespace=ns,
-        body=client.V1DeleteOptions(
-            propagation_policy="Background",
-            grace_period_seconds=grace_period_seconds,
-        ),
-    )
     logger.info(f"Deleted job {name} from namespace {ns}")
 
 
@@ -783,7 +790,10 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         name: Name of the job to check.
 
     Returns:
-        Current status of the job (PENDING, RUNNING, FINISHED, ERROR, or UNKNOWN).
+        Current status of the job (PENDING, RUNNING, FINISHED, ERROR, or UNKNOWN when the job is gone).
+
+    Raises:
+        ApiException: The job could not be read. That says nothing about the job, so it is never a status.
     """
     try:
         job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=ns))
@@ -815,4 +825,4 @@ def get_job_status(ns: str, name: str) -> JobStatus:
     except ApiException as e:
         if e.status == HTTPStatus.NOT_FOUND:
             return JobStatus.UNKNOWN
-        return JobStatus.ERROR
+        raise

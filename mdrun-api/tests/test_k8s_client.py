@@ -229,12 +229,29 @@ class TestSimGuardAndSyncTraps:
         assert "--checksum" in sync
 
 
+class TestDeleteJob:
+    """Only a missing Job makes a delete a no-op."""
+
+    def test_missing_job_is_a_no_op(self, mocker: MockerFixture) -> None:
+        batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+        batch_v1.delete_namespaced_job.side_effect = ApiException(status=404)
+
+        k8s_client.delete_job(ns="ns", name="mdrun-job")
+
+    def test_api_error_raises(self, mocker: MockerFixture) -> None:
+        """A swallowed error would leave the Job running while its caller records it gone."""
+        batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+        batch_v1.delete_namespaced_job.side_effect = ApiException(status=503)
+
+        with pytest.raises(ApiException):
+            k8s_client.delete_job(ns="ns", name="mdrun-job")
+
+
 class TestDeleteJobGrace:
     """The pod grace period is parameterizable so stops can outlive plain deletes."""
 
     def _delete(self, mocker: MockerFixture, **kwargs: Any) -> MagicMock:
         batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
-        mocker.patch("k8s_client.ping_resource", return_value=True)
         k8s_client.delete_job(ns="ns", name="mdrun-job", **kwargs)
         return batch_v1
 
@@ -450,6 +467,21 @@ class TestGetJobStatus:
         _stub_status(mocker, pod_error=ApiException(status=500))
 
         assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.RUNNING
+
+    def test_missing_job_reports_unknown(self, mocker: MockerFixture) -> None:
+        batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+        batch_v1.read_namespaced_job.side_effect = ApiException(status=404)
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.UNKNOWN
+
+    @pytest.mark.parametrize("http_status", [401, 403, 429, 500, 503])
+    def test_api_error_raises(self, mocker: MockerFixture, http_status: int) -> None:
+        """An unreadable Job is not a failed one."""
+        batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+        batch_v1.read_namespaced_job.side_effect = ApiException(status=http_status)
+
+        with pytest.raises(ApiException):
+            k8s_client.get_job_status(ns="ns", name="mdrun-job")
 
 
 class TestSimulationResources:
