@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from modules.experiments.dependencies import get_experiment_or_404
 from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.models import SimulationJob
-from modules.jobs.runs import RunService
+from modules.jobs.runs import RunService, mdrun_call
 from modules.simulations.manifest import Simulation, check_simulation_path
 
 logger = logging.getLogger(__name__)
@@ -48,16 +48,17 @@ class GromacsService(RunService[GromacsJob]):
         tpr_rel_path = simulation.resolved_files["run_input"]
         extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps {FORCED_NSTEPS}"
 
-        mdrun_job = await self._mdrun.create_gmx_job(
-            experiment_id=experiment.id,
-            tpr_name=tpr_rel_path,
-            bucket_name=S3_BUCKET,
-            pme=pme.value,
-            nb=nb.value,
-            np=np,
-            ntomp=ntomp,
-            extra_args=extra_args,
-        )
+        with mdrun_call("Failed to submit the run."):
+            mdrun_job = await self._mdrun.create_gmx_job(
+                experiment_id=experiment.id,
+                tpr_name=tpr_rel_path,
+                bucket_name=S3_BUCKET,
+                pme=pme.value,
+                nb=nb.value,
+                np=np,
+                ntomp=ntomp,
+                extra_args=extra_args,
+            )
         job = GromacsJob(
             id=mdrun_job["id"],
             simulation_path=simulation_path,
@@ -123,16 +124,17 @@ class GromacsService(RunService[GromacsJob]):
         cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
         extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {nsteps}"]))
 
-        mdrun_job = await self._mdrun.create_gmx_job(
-            experiment_id=experiment.id,
-            tpr_name=tpr_rel_path,
-            bucket_name=S3_BUCKET,
-            pme=latest.pme.value,
-            nb=latest.nb.value,
-            np=latest.np,
-            ntomp=latest.ntomp,
-            extra_args=extra_args,
-        )
+        with mdrun_call("Failed to submit the run."):
+            mdrun_job = await self._mdrun.create_gmx_job(
+                experiment_id=experiment.id,
+                tpr_name=tpr_rel_path,
+                bucket_name=S3_BUCKET,
+                pme=latest.pme.value,
+                nb=latest.nb.value,
+                np=latest.np,
+                ntomp=latest.ntomp,
+                extra_args=extra_args,
+            )
 
         job = GromacsJob(
             id=mdrun_job["id"],

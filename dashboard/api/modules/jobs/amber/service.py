@@ -12,7 +12,7 @@ from fastapi import Depends
 from modules.experiments.dependencies import get_experiment_or_404
 from modules.jobs.amber.models import AmberJob
 from modules.jobs.models import SimulationJob
-from modules.jobs.runs import RunService
+from modules.jobs.runs import RunService, mdrun_call
 from modules.simulations.manifest import Simulation, check_simulation_path
 
 logger = logging.getLogger(__name__)
@@ -49,18 +49,19 @@ class AmberService(RunService[AmberJob]):
         )
         resolved = simulation.resolved_files
 
-        mdrun_job = await self._mdrun.create_amber_job(
-            experiment_id=experiment.id,
-            prmtop_name=resolved["topology"],
-            inpcrd_name=resolved["coordinates"],
-            mdin_name=resolved["control"],
-            bucket_name=S3_BUCKET,
-            binary=amber_binary.value,
-            ewald=ewald_preset.value,
-            np=np,
-            ntomp=ntomp,
-            extra_args=simulation.extra_args,
-        )
+        with mdrun_call("Failed to submit the run."):
+            mdrun_job = await self._mdrun.create_amber_job(
+                experiment_id=experiment.id,
+                prmtop_name=resolved["topology"],
+                inpcrd_name=resolved["coordinates"],
+                mdin_name=resolved["control"],
+                bucket_name=S3_BUCKET,
+                binary=amber_binary.value,
+                ewald=ewald_preset.value,
+                np=np,
+                ntomp=ntomp,
+                extra_args=simulation.extra_args,
+            )
         job = AmberJob(
             id=mdrun_job["id"],
             simulation_path=simulation_path,

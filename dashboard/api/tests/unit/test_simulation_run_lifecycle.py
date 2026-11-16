@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
+import httpx
 import pytest
 from clients import Clients
 from clients.mdrun import MDRunClient
@@ -16,6 +17,7 @@ from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
 from httpx import AsyncClient
 from modules.jobs.amber.models import AmberJob
 from modules.jobs.gmx.models import GromacsJob
+from modules.jobs.runs import MDRUN_UNAVAILABLE
 from modules.jobs.service import JobsService
 from modules.models import Experiment
 from modules.simulations.manifest import Simulation
@@ -152,6 +154,12 @@ def _mock_mdrun(mocker: MockerFixture, status: str = "finished") -> dict:
     return mocks
 
 
+def _mdrun_failure(problem: dict) -> httpx.HTTPStatusError:
+    request = httpx.Request("POST", "http://mdrun.test/jobs/gmx/job-live/stop")
+    response = httpx.Response(HTTPStatus.INTERNAL_SERVER_ERROR, json=problem, request=request)
+    return httpx.HTTPStatusError(problem["detail"], request=request, response=response)
+
+
 def _stop_mocks(mocker: MockerFixture, engine: str = "gmx") -> dict:
     """MDRun mocks where a successful stop reports "stopped" on subsequent reads."""
     get_key = "get_gmx" if engine == "gmx" else "get_amber"
@@ -184,6 +192,45 @@ class TestStop:
         assert stopped is not None, "row must be kept"
         assert stopped._last_known_status is JobStatus.STOPPED
         assert log.exists(), "result files must survive a stop"
+
+    @pytest.mark.parametrize(
+        ("failure", "token", "solution"),
+        [
+            # MDRun's own upstream problem keeps its type and solution.
+            (
+                _mdrun_failure({"type": "urn:mddash:upstream-rejected", "detail": "d", "solution": "Contact support."}),
+                "upstream-rejected",
+                "Contact support.",
+            ),
+            (_mdrun_failure({"type": "urn:mddash:internal-error", "detail": "d"}), "upstream-unavailable", None),
+            (httpx.ConnectError("refused"), "upstream-unavailable", None),
+        ],
+    )
+    async def test_failed_stop_names_the_upstream_and_keeps_the_run_live(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        failure: Exception,
+        token: str,
+        solution: str | None,
+    ) -> None:
+        mdrun = _stop_mocks(mocker)
+        mdrun["stop"].side_effect = failure
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
+        job = await _add_gmx_job(db_session, experiment_id, sim_path, "job-live", JobStatus.RUNNING)
+
+        response = await client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/stop")
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        problem = response.json()
+        assert problem["type"] == f"urn:mddash:{token}"
+        assert problem["solution"] == (solution or MDRUN_UNAVAILABLE)
+        kept = await _fresh(db_session, GromacsJob, job.id)
+        assert kept is not None
+        assert kept._last_known_status is JobStatus.RUNNING
 
     async def test_stop_keeps_finished_when_the_run_beats_the_stop(
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
