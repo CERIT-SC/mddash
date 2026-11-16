@@ -5,7 +5,9 @@ from http import HTTPStatus
 
 from extensions import db
 from flask import Flask, Response, jsonify, request
+from kubernetes.client.rest import ApiException
 from marshmallow import ValidationError
+from urllib3.exceptions import HTTPError
 from werkzeug.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -91,6 +93,23 @@ def register_error_handlers(app: Flask) -> None:
             exc_info=code >= HTTPStatus.INTERNAL_SERVER_ERROR,
         )
         return exc.to_response()
+
+    @app.errorhandler(ApiException)
+    @app.errorhandler(HTTPError)
+    def _kubernetes(_exc: Exception) -> Response:
+        db.session.rollback()
+        logger.error(
+            "Kubernetes call failed on %s %s",
+            request.method,
+            request.path,
+            exc_info=True,  # ruff:ignore[exc-info-outside-except-handler]
+        )
+        return ApiError(
+            500,
+            "The Kubernetes API did not complete the request.",
+            "urn:mddash:upstream-unavailable",
+            "Try again in a moment; if the problem persists, contact support.",
+        ).to_response()
 
     @app.errorhandler(Exception)
     def _unhandled(_exc: Exception) -> Response:
