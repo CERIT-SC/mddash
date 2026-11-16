@@ -3,11 +3,10 @@
 import logging
 from http import HTTPStatus
 
+import k8s_client
 from extensions import db
 from flask import Flask, Response, jsonify, request
-from kubernetes.client.rest import ApiException
 from marshmallow import ValidationError
-from urllib3.exceptions import HTTPError
 from werkzeug.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -94,22 +93,30 @@ def register_error_handlers(app: Flask) -> None:
         )
         return exc.to_response()
 
-    @app.errorhandler(ApiException)
-    @app.errorhandler(HTTPError)
-    def _kubernetes(_exc: Exception) -> Response:
+    def _kubernetes(exc: Exception) -> Response:
         db.session.rollback()
+        if k8s_client.is_rejection(exc):
+            error = ApiError(
+                500,
+                "Kubernetes rejected the request.",
+                "urn:mddash:upstream-rejected",
+                "Retrying will not help; contact support.",
+            )
+        else:
+            error = ApiError(
+                500,
+                "The Kubernetes API did not complete the request.",
+                "urn:mddash:upstream-unavailable",
+                "Try again in a moment; if the problem persists, contact support.",
+            )
+        # One line: the route names the call, and an outage repeats it per request.
         logger.error(
-            "Kubernetes call failed on %s %s",
-            request.method,
-            request.path,
-            exc_info=True,  # ruff:ignore[exc-info-outside-except-handler]
+            "%s %s -> 500 [%s]: %s", request.method, request.path, error.problem_type, k8s_client.describe_error(exc)
         )
-        return ApiError(
-            500,
-            "The Kubernetes API did not complete the request.",
-            "urn:mddash:upstream-unavailable",
-            "Try again in a moment; if the problem persists, contact support.",
-        ).to_response()
+        return error.to_response()
+
+    for kubernetes_error in k8s_client.K8S_ERRORS:
+        app.register_error_handler(kubernetes_error, _kubernetes)
 
     @app.errorhandler(Exception)
     def _unhandled(_exc: Exception) -> Response:

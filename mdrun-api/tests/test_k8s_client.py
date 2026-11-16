@@ -238,6 +238,8 @@ class TestDeleteJob:
 
         k8s_client.delete_job(ns="ns", name="mdrun-job")
 
+        batch_v1.delete_namespaced_job.assert_called_once()
+
     def test_api_error_raises(self, mocker: MockerFixture) -> None:
         """A swallowed error would leave the Job running while its caller records it gone."""
         batch_v1 = mocker.patch.object(k8s_client, "batch_v1")

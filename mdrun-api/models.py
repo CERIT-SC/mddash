@@ -11,12 +11,10 @@ from kubernetes.client.rest import ApiException
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from urllib3.exceptions import HTTPError
 
 logger = logging.getLogger(__name__)
 
 _TERMINAL = frozenset({JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED})
-_K8S_ERRORS = (ApiException, HTTPError)
 
 
 class MdrunUsage(db.Model):  # type: ignore
@@ -178,9 +176,9 @@ class MdrunJob(db.Model):  # type: ignore
         )
         try:
             outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
-        except _K8S_ERRORS:
+        except k8s_client.K8S_ERRORS as e:
             # The delete went through: the stop holds whatever the outcome was.
-            logger.warning("Outcome of stopped job %s is unreadable", self.job_name, exc_info=True)
+            logger.warning("Outcome of stopped job %s is unreadable: %s", self.job_name, k8s_client.describe_error(e))
             outcome = JobStatus.STOPPED
         self.last_status = JobStatus.FINISHED if outcome == JobStatus.FINISHED else JobStatus.STOPPED
         db.session.commit()
@@ -224,6 +222,7 @@ class MdrunJob(db.Model):  # type: ignore
             self.record_usage(UsageOutcome(new.value))
             try:
                 self.delete()
-            except _K8S_ERRORS:
-                # The outcome is real either way; ttlSecondsAfterFinished removes the Job.
-                logger.warning("Cleanup of %s job %s failed", new, self.job_name, exc_info=True)
+            except ApiException as e:
+                # Kubernetes answered, so the outcome stands and ttlSecondsAfterFinished removes the Job.
+                # No answer propagates instead: the next read retries the whole transition.
+                logger.warning("Cleanup of %s job %s failed: %s", new, self.job_name, k8s_client.describe_error(e))

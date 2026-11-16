@@ -25,6 +25,10 @@ config.load_incluster_config()
 core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
 
+# Every way a Kubernetes call fails: an error response, or no response at all.
+K8S_ERRORS = (ApiException, HTTPError)
+_RETRYABLE_STATUSES = frozenset({HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS})
+
 _S3_SYNC_IMAGE = "rclone/rclone:1.74.4"
 _SHARED_VOLUME_NAME = "shared-data"
 # Grace period for stop deletions: mdrun needs time to write its final checkpoint
@@ -598,6 +602,23 @@ def create_amber_job(
     logger.info(f"Created AMBER job {name} in namespace {ns}")
 
 
+def is_rejection(error: Exception) -> bool:
+    """Whether Kubernetes answered and refused (quota, invalid manifest, RBAC): the same request cannot succeed later."""
+    return (
+        isinstance(error, ApiException)
+        and error.status is not None
+        and HTTPStatus.BAD_REQUEST <= error.status < HTTPStatus.INTERNAL_SERVER_ERROR
+        and error.status not in _RETRYABLE_STATUSES
+    )
+
+
+def describe_error(error: Exception) -> str:
+    """One log line for a failed call: the API's status and reason, or the connection failure."""
+    if isinstance(error, ApiException):
+        return f"{error.status} {error.reason}"
+    return f"{type(error).__name__}: {error}"
+
+
 def delete_job(ns: str, name: str, grace_period_seconds: int = 5) -> None:
     """
     Delete a Kubernetes job by name; a missing job is a no-op.
@@ -774,7 +795,7 @@ def get_measured_usage(ns: str, name: str, pod: "V1Pod | None") -> MeasuredUsage
             log = (response.data or b"").decode("utf-8", errors="replace")
         finally:
             response.release_conn()
-    except (ApiException, HTTPError):
+    except K8S_ERRORS:
         return None
     # The kubelet joins a line onto unterminated output before it, such as `mdrun -v` progress.
     latest = next((line for line in reversed(log.splitlines()) if _USAGE_PREFIX in line), None)

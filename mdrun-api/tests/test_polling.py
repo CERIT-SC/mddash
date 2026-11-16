@@ -2,11 +2,13 @@
 
 from unittest.mock import PropertyMock
 
+import k8s_client
 import pytest
 from enums import JobStatus
-from models import MdrunJob
+from models import MdrunJob, MdrunUsage
 from polling import poll_once, run
 from sqlalchemy.orm import Session
+from urllib3.exceptions import ProtocolError
 
 EXPECTED_POLLED_JOBS = 2
 LOOP_INTERVAL = 5
@@ -43,6 +45,30 @@ def test_poll_once_continues_when_job_status_refresh_fails(app, db_session: Sess
     poll_once(app)
 
     assert status.call_count == EXPECTED_POLLED_JOBS
+
+
+def test_poll_once_drops_a_failed_jobs_pending_writes(app, db_session: Session, mocker) -> None:
+    """A failed job's uncommitted ledger writes must not ride on the next job's commit."""
+    resources = k8s_client.JobResources(cpu=1, memory_gib=1, gpus=0)
+    for job_id in ("a", "b"):
+        MdrunJob.create(
+            job_id, f"mdrun-{job_id}", "exp1", engine="gmx", resources=resources, owner=None, owner_namespace=None
+        )
+    finished = {"mdrun-a": JobStatus.FINISHED, "mdrun-b": JobStatus.RUNNING}
+    mocker.patch("k8s_client.get_job_status", side_effect=lambda ns, name: finished[name])
+    mocker.patch("k8s_client.get_pod_times", return_value=(None, None))
+    # The cleanup delete gets no answer after the window close was written.
+    mocker.patch("k8s_client.delete_job", side_effect=ProtocolError("reset"))
+
+    poll_once(app)
+
+    db_session.expire_all()
+    usage = db_session.get(MdrunUsage, "a")
+    assert usage is not None
+    assert usage.finished_at is None
+    polled = db_session.get(MdrunJob, "b")
+    assert polled is not None
+    assert polled.last_status == JobStatus.RUNNING
 
 
 def test_run_loops_and_sleeps_between_polls(app, mocker) -> None:
