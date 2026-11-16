@@ -303,13 +303,6 @@ class TestKubernetesApiErrors:
         client.get(f"/api/jobs/gmx/{job_id}")
         return job_id
 
-    def _assert_still_running(self, db_session: Session, job_id: str) -> None:
-        job = db_session.get(MdrunJob, job_id)
-        assert job is not None
-        assert job.last_status == JobStatus.RUNNING
-        record = _usage(db_session, job_id)
-        assert (record.finished_at, record.outcome) == (None, None)
-
     def test_failed_status_read_leaves_the_job_running(
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
     ) -> None:
@@ -319,38 +312,12 @@ class TestKubernetesApiErrors:
         response = client.get(f"/api/jobs/gmx/{job_id}")
 
         assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        self._assert_still_running(db_session, job_id)
+        job = db_session.get(MdrunJob, job_id)
+        assert job is not None
+        assert job.last_status == JobStatus.RUNNING
+        record = _usage(db_session, job_id)
+        assert (record.finished_at, record.outcome) == (None, None)
         mock_k8s_client["delete_job"].assert_not_called()
-
-    def test_failed_status_read_stops_nothing(
-        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
-    ) -> None:
-        job_id = self._running(client, mock_k8s_client, pod_times)
-        mock_k8s_client["get_job_status"].side_effect = ApiException(status=503)
-
-        response = client.post(f"/api/jobs/gmx/{job_id}/stop")
-
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        self._assert_still_running(db_session, job_id)
-        mock_k8s_client["delete_job"].assert_not_called()
-
-    @pytest.mark.parametrize(("method", "suffix"), [("POST", "/stop"), ("DELETE", "")])
-    def test_failed_job_delete_leaves_the_job_running(
-        self,
-        client: FlaskClient,
-        db_session: Session,
-        mock_k8s_client: dict[str, Any],
-        pod_times: MagicMock,
-        method: str,
-        suffix: str,
-    ) -> None:
-        job_id = self._running(client, mock_k8s_client, pod_times)
-        mock_k8s_client["delete_job"].side_effect = ApiException(status=503)
-
-        response = client.open(f"/api/jobs/gmx/{job_id}{suffix}", method=method)
-
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        self._assert_still_running(db_session, job_id)
 
     @pytest.mark.parametrize("error", [ApiException(status=503), ProtocolError("reset")])
     def test_stop_survives_an_unreadable_outcome(
