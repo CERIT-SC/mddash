@@ -196,7 +196,8 @@ class RunService[J: SimulationJob]:
             await self._session.commit()
         except IntegrityError:
             await self._session.rollback()
-            await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
+            with mdrun_call("Failed to delete the run."):
+                await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
             raise Conflict(ACTIVE_RUN_CONFLICT) from None
         simulation.mark_readonly()
         await self.refresh_status(job)

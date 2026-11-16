@@ -159,7 +159,8 @@ class GromacsService(RunService[GromacsJob]):
         except IntegrityError:
             # Another request committed the row first; delete our unreferenced cluster job.
             await self._session.rollback()
-            await self._mdrun.delete_job(job.MDRUN_ENGINE, mdrun_job["id"])
+            with mdrun_call("Failed to delete the run."):
+                await self._mdrun.delete_job(job.MDRUN_ENGINE, mdrun_job["id"])
             raise BadRequest("Another extension of this simulation is already in progress.") from None
         logger.info(
             f"Extended GROMACS simulation {simulation_path} (experiment {experiment.id}) "

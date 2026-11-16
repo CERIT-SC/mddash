@@ -303,11 +303,20 @@ class TestSubmit:
         assert response.status_code == HTTPStatus.CREATED
         mdrun["create"].assert_called_once()
 
+    @pytest.mark.parametrize("cleanup_fails", [False, True])
     async def test_submit_race_loser_gets_409_and_its_mdrun_job_is_deleted(
-        self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        cleanup_fails: bool,
     ) -> None:
         """A concurrent submit committing first wins; the loser rolls back and tears down its MDRun job."""
         mdrun = _mock_mdrun(mocker)
+        if cleanup_fails:
+            mdrun["delete_gmx"].side_effect = httpx.ConnectError("refused")
         sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
 
         async def concurrent_winner(**kwargs: object) -> dict:
@@ -335,7 +344,11 @@ class TestSubmit:
             json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
         )
 
-        assert response.status_code == HTTPStatus.CONFLICT
+        if cleanup_fails:
+            # The losing MDRun job may still run: the failed teardown outranks the conflict.
+            assert response.json()["type"] == "urn:mddash:upstream-unavailable"
+        else:
+            assert response.status_code == HTTPStatus.CONFLICT
         mdrun["delete_gmx"].assert_called_once_with("losing-run")
         assert {j.id for j in await _runs(db_session, experiment_id, sim_path)} == {"rival-run"}
 
@@ -691,11 +704,20 @@ class TestExtend:
         assert run is not None
         assert run.nsteps == 50010
 
+    @pytest.mark.parametrize("cleanup_fails", [False, True])
     async def test_extend_race_loser_gets_400_and_its_mdrun_job_is_deleted(
-        self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        cleanup_fails: bool,
     ) -> None:
         """A concurrent extension winning between the live check and our row swap is rejected atomically."""
         mdrun = _mock_mdrun(mocker)
+        if cleanup_fails:
+            mdrun["delete_gmx"].side_effect = httpx.ConnectError("refused")
         sim_path = await self._setup_finished_run(
             db_session, experiment_id, tmp_path, _nsteps=100000, _performance=68.5
         )
@@ -731,8 +753,11 @@ class TestExtend:
             f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 50000}
         )
 
-        assert response.status_code == HTTPStatus.BAD_REQUEST
-        assert "already in progress" in response.json()["detail"]
+        if cleanup_fails:
+            assert response.json()["type"] == "urn:mddash:upstream-unavailable"
+        else:
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            assert "already in progress" in response.json()["detail"]
         # The orphaned cluster job behind the losing insert is torn down.
         mdrun["delete_gmx"].assert_called_once_with("losing-run")
         ids = {j.id for j in await _runs(db_session, experiment_id, sim_path)}

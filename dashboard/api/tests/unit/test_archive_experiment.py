@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
 import pytest
 from clients import Clients
+from clients.mdrun import MDRunClient
 from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus
 from core.errors import ApiError, Conflict
 from modules.archive.service import ArchiveService
@@ -429,6 +431,38 @@ class TestDeleteAnalysisJobs:
         ):
             await service.delete(experiment)
         mock_purge.assert_not_called()
+
+    async def test_failing_run_delete_keeps_the_experiment(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService, tmp_path: Path
+    ) -> None:
+        """A production run MDRun could not delete may still be live: every row stays for a retry."""
+        db_session.add(
+            GromacsJob(
+                id="run-1",
+                experiment_id=EXP_ID,
+                simulation_path="production/md.simulation.json",
+                np=8,
+                ntomp=1,
+                pme=DeviceType.CPU,
+                nb=DeviceType.GPU,
+                _last_known_status=JobStatus.RUNNING,
+            )
+        )
+        experiment = await _reload(db_session)
+        with (
+            patch.object(ArchiveService, "delete_jobs"),
+            patch.object(ArchiveService, "purge"),
+            patch.object(NotebookService, "stop"),
+            patch.object(MDRunClient, "delete_job", side_effect=httpx.ConnectError("refused")),
+            pytest.raises(ApiError) as raised,
+        ):
+            await service.delete(experiment)
+
+        assert raised.value.problem_type == "urn:mddash:upstream-unavailable"
+        await db_session.rollback()
+        kept = await _reload(db_session)
+        assert [job.id for job in kept.simulation_jobs] == ["run-1"]
+        assert (tmp_path / EXP_ID).is_dir()
 
 
 class TestArchivedJobSerialization:
