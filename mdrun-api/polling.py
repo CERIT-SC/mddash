@@ -2,10 +2,8 @@ import logging
 import os
 import time
 
-import k8s_client
 import metrics
 from enums import JobStatus
-from extensions import db
 from flask import Flask
 from models import MdrunJob
 
@@ -23,11 +21,7 @@ def poll_once(app: Flask) -> None:
         for job in jobs:
             try:
                 _ = job.status
-            except k8s_client.K8S_ERRORS as e:
-                db.session.rollback()
-                logger.warning("Could not poll job %s: %s", job.job_name, k8s_client.describe_error(e))
             except Exception as e:
-                db.session.rollback()
                 logger.exception("Error polling job %s: %s", job.job_name, e)
 
 

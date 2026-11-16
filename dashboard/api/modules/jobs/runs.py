@@ -1,18 +1,15 @@
 """Production run lifecycle shared by the MDRun engines (GROMACS, AMBER)."""
 
 import logging
-from collections.abc import Iterator, Sequence
-from contextlib import contextmanager
-from http import HTTPStatus
+from collections.abc import Sequence
 from typing import ClassVar, cast
 
 import anyio
-import httpx
 from core.cache import simulation_status_cache
 from core.concurrency import gather
 from core.dependencies import ClientsDep, SessionDep
 from core.enums import JobStatus
-from core.errors import ApiError, BadRequest, Conflict, NotFound
+from core.errors import BadRequest, Conflict, NotFound
 from sqlalchemy.exc import IntegrityError
 
 from modules.jobs.models import SimulationJob
@@ -22,45 +19,6 @@ from modules.simulations.manifest import Simulation
 logger = logging.getLogger(__name__)
 
 ACTIVE_RUN_CONFLICT = "A run is already active for this simulation; stop it first to submit a new run."
-MDRUN_UNAVAILABLE = "The simulation service is unavailable; try again in a moment."
-_UPSTREAM = "urn:mddash:upstream-"
-
-
-def _upstream_problem(error: httpx.HTTPError) -> dict:
-    """MDRun's problem body when it reports a failed upstream of its own (Kubernetes), else empty."""
-    if not isinstance(error, httpx.HTTPStatusError):
-        return {}
-    try:
-        problem = error.response.json()
-    except ValueError:
-        return {}
-    named = isinstance(problem, dict) and str(problem.get("type", "")).startswith(_UPSTREAM)
-    return problem if named else {}
-
-
-@contextmanager
-def mdrun_call(description: str) -> Iterator[None]:
-    """
-    Report a failed MDRun call (unreachable, or a 5xx) as an upstream failure instead of a generic 500.
-
-    MDRun's own upstream problems keep their type and solution; its 4xx responses pass through unchanged.
-
-    Raises:
-        ApiError: `upstream-unavailable`, or the upstream type MDRun reported.
-    """
-    try:
-        yield
-    except httpx.HTTPError as exc:
-        if isinstance(exc, httpx.HTTPStatusError) and not exc.response.is_server_error:
-            raise
-        problem = _upstream_problem(exc)
-        logger.error("%s MDRun: %s", description, exc)
-        raise ApiError(
-            HTTPStatus.INTERNAL_SERVER_ERROR,
-            description,
-            problem.get("type", f"{_UPSTREAM}unavailable"),
-            str(problem.get("solution") or MDRUN_UNAVAILABLE),
-        ) from exc
 
 
 class RunService[J: SimulationJob]:
@@ -116,8 +74,7 @@ class RunService[J: SimulationJob]:
 
     async def delete_remote(self, job: SimulationJob) -> None:
         """Delete the MDRun job and this run's result files (the caller deletes the row)."""
-        with mdrun_call("Failed to delete the run."):
-            await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
+        await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
         await anyio.to_thread.run_sync(job.cleanup_files)
 
     async def remove(self, experiment_id: str, simulation_path: str) -> J | None:
@@ -157,8 +114,7 @@ class RunService[J: SimulationJob]:
         job = await self.get(experiment_id, simulation_path)
         if not job.is_live:
             raise BadRequest("Only a live run can be stopped.")
-        with mdrun_call("Failed to stop the run."):
-            await self._mdrun.stop_job(job.MDRUN_ENGINE, job.id)
+        await self._mdrun.stop_job(job.MDRUN_ENGINE, job.id)
         try:
             status = JobStatus.from_string((await self._mdrun.get_job(job.MDRUN_ENGINE, job.id))["status"])
         except Exception:
@@ -196,8 +152,7 @@ class RunService[J: SimulationJob]:
             await self._session.commit()
         except IntegrityError:
             await self._session.rollback()
-            with mdrun_call("Failed to delete the run."):
-                await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
+            await self._mdrun.delete_job(job.MDRUN_ENGINE, job.id)
             raise Conflict(ACTIVE_RUN_CONFLICT) from None
         simulation.mark_readonly()
         await self.refresh_status(job)

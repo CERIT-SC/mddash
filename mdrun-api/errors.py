@@ -3,7 +3,6 @@
 import logging
 from http import HTTPStatus
 
-import k8s_client
 from extensions import db
 from flask import Flask, Response, jsonify, request
 from marshmallow import ValidationError
@@ -92,31 +91,6 @@ def register_error_handlers(app: Flask) -> None:
             exc_info=code >= HTTPStatus.INTERNAL_SERVER_ERROR,
         )
         return exc.to_response()
-
-    def _kubernetes(exc: Exception) -> Response:
-        db.session.rollback()
-        if k8s_client.is_rejection(exc):
-            error = ApiError(
-                500,
-                "Kubernetes rejected the request.",
-                "urn:mddash:upstream-rejected",
-                "Retrying will not help; contact support.",
-            )
-        else:
-            error = ApiError(
-                500,
-                "The Kubernetes API did not complete the request.",
-                "urn:mddash:upstream-unavailable",
-                "Try again in a moment; if the problem persists, contact support.",
-            )
-        # One line: the route names the call, and an outage repeats it per request.
-        logger.error(
-            "%s %s -> 500 [%s]: %s", request.method, request.path, error.problem_type, k8s_client.describe_error(exc)
-        )
-        return error.to_response()
-
-    for kubernetes_error in k8s_client.K8S_ERRORS:
-        app.register_error_handler(kubernetes_error, _kubernetes)
 
     @app.errorhandler(Exception)
     def _unhandled(_exc: Exception) -> Response:

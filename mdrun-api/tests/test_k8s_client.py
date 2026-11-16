@@ -249,17 +249,6 @@ class TestDeleteJob:
             k8s_client.delete_job(ns="ns", name="mdrun-job")
 
 
-class TestDescribeError:
-    def test_multiline_reason_stays_on_one_line(self) -> None:
-        """The client puts a newline in the reason of a TLS failure."""
-        described = k8s_client.describe_error(ApiException(status=0, reason="SSLError\nEOF occurred\r\nin handshake"))
-
-        assert described == "0 SSLError EOF occurred in handshake"
-
-    def test_multiline_connection_failure_stays_on_one_line(self) -> None:
-        assert k8s_client.describe_error(ProtocolError("reset\nby peer")) == "ProtocolError: reset by peer"
-
-
 class TestDeleteJobGrace:
     """The pod grace period is parameterizable so stops can outlive plain deletes."""
 

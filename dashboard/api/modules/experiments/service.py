@@ -330,9 +330,6 @@ class ExperimentService:
         for job in self.jobs.all_jobs(experiment):
             try:
                 await self.jobs.delete_remote(job)
-            except ApiError:
-                # A run MDRun could not delete may still be live: keep every row so the delete can be retried.
-                raise
             except Exception:
                 logger.exception(f"Failed to delete {type(job).__name__} {job.id}")
 

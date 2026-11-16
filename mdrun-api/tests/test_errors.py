@@ -2,18 +2,11 @@
 
 import json
 from http import HTTPStatus
-from typing import Any
 
-import pytest
-from enums import JobStatus
 from flask import Flask
 from flask.testing import FlaskClient
 from flask.typing import ResponseReturnValue
-from kubernetes.client.rest import ApiException
 from marshmallow import ValidationError
-from models import MdrunJob
-from sqlalchemy.orm import Session
-from urllib3.exceptions import ProtocolError
 
 
 class TestProblemResponse:
@@ -155,41 +148,3 @@ class TestUnhandledExceptions:
 
         resp = client.get("/_test/crash")
         assert resp.mimetype == "application/problem+json"
-
-
-class TestKubernetesErrors:
-    """A failed Kubernetes call is reportable as such, without its internals."""
-
-    @pytest.mark.parametrize(
-        ("error", "token", "retry"),
-        [
-            (ApiException(status=503, reason="etcd leader changed"), "upstream-unavailable", True),
-            (ApiException(status=429, reason="etcd leader changed"), "upstream-unavailable", True),
-            (ProtocolError("reset"), "upstream-unavailable", True),
-            # Kubernetes answered and refused: the same request cannot succeed later.
-            (ApiException(status=403, reason="exceeded quota: etcd"), "upstream-rejected", False),
-            (ApiException(status=422, reason="etcd"), "upstream-rejected", False),
-        ],
-    )
-    def test_failed_kubernetes_call_names_the_upstream(
-        self,
-        client: FlaskClient,
-        db_session: Session,
-        mock_k8s_client: dict[str, Any],
-        error: Exception,
-        token: str,
-        retry: bool,
-    ) -> None:
-        db_session.add(MdrunJob(id="job", job_name="mdrun-job", experiment_id="exp1", last_status=JobStatus.RUNNING))
-        db_session.commit()
-        mock_k8s_client["get_job_status"].side_effect = error
-
-        resp = client.get("/api/jobs/gmx/job")
-
-        assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert resp.mimetype == "application/problem+json"
-        data = resp.get_json()
-        assert data["type"] == f"urn:mddash:{token}"
-        assert ("Try again" in data["solution"]) is retry
-        assert "etcd" not in resp.get_data(as_text=True)
-        assert "reset" not in resp.get_data(as_text=True)

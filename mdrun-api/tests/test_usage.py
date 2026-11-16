@@ -366,34 +366,6 @@ class TestKubernetesApiErrors:
         assert job.last_status == status
         assert _usage(db_session, job_id).outcome == outcome
 
-    # The client reports a TLS failure as an ApiException without a status.
-    @pytest.mark.parametrize("error", [ProtocolError("reset"), ApiException(status=0, reason="SSLError\nEOF")])
-    def test_cleanup_without_an_answer_is_retried(
-        self,
-        client: FlaskClient,
-        db_session: Session,
-        mock_k8s_client: dict[str, Any],
-        pod_times: MagicMock,
-        error: Exception,
-    ) -> None:
-        """No answer says nothing about the Job, so the transition waits for a read that can also delete."""
-        job_id = _submit(client)
-        mock_k8s_client["get_job_status"].return_value = JobStatus.FINISHED
-        mock_k8s_client["delete_job"].side_effect = error
-
-        failed = client.get(f"/api/jobs/gmx/{job_id}")
-
-        job = db_session.get(MdrunJob, job_id)
-        assert job is not None
-        assert (failed.status_code, job.last_status) == (HTTPStatus.INTERNAL_SERVER_ERROR, JobStatus.PENDING)
-        assert _usage(db_session, job_id).finished_at is None
-
-        mock_k8s_client["delete_job"].side_effect = None
-        retried = client.get(f"/api/jobs/gmx/{job_id}")
-
-        assert retried.get_json()["status"] == "finished"
-        assert _usage(db_session, job_id).outcome == UsageOutcome.FINISHED
-
 
 class TestMeasuredUsage:
     """Closing a window stores what the job's container measured, read before the Job and its log are deleted."""
