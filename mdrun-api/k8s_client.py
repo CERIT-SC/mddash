@@ -612,11 +612,15 @@ def is_rejection(error: Exception) -> bool:
     )
 
 
+def answered(error: Exception) -> bool:
+    """Whether Kubernetes answered with an error; the client raises a status-less ApiException for a TLS failure."""
+    return isinstance(error, ApiException) and bool(error.status)
+
+
 def describe_error(error: Exception) -> str:
     """One log line for a failed call: the API's status and reason, or the connection failure."""
-    if isinstance(error, ApiException):
-        return f"{error.status} {error.reason}"
-    return f"{type(error).__name__}: {error}"
+    text = f"{error.status} {error.reason}" if isinstance(error, ApiException) else f"{type(error).__name__}: {error}"
+    return " ".join(text.split())
 
 
 def delete_job(ns: str, name: str, grace_period_seconds: int = 5) -> None:

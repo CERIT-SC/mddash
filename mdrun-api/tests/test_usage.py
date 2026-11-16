@@ -366,13 +366,20 @@ class TestKubernetesApiErrors:
         assert job.last_status == status
         assert _usage(db_session, job_id).outcome == outcome
 
+    # The client reports a TLS failure as an ApiException without a status.
+    @pytest.mark.parametrize("error", [ProtocolError("reset"), ApiException(status=0, reason="SSLError\nEOF")])
     def test_cleanup_without_an_answer_is_retried(
-        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any], pod_times: MagicMock
+        self,
+        client: FlaskClient,
+        db_session: Session,
+        mock_k8s_client: dict[str, Any],
+        pod_times: MagicMock,
+        error: Exception,
     ) -> None:
         """No answer says nothing about the Job, so the transition waits for a read that can also delete."""
         job_id = _submit(client)
         mock_k8s_client["get_job_status"].return_value = JobStatus.FINISHED
-        mock_k8s_client["delete_job"].side_effect = ProtocolError("reset")
+        mock_k8s_client["delete_job"].side_effect = error
 
         failed = client.get(f"/api/jobs/gmx/{job_id}")
 

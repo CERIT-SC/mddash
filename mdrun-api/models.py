@@ -7,7 +7,6 @@ import k8s_client
 from config import NAMESPACE
 from enums import JobStatus, UsageOutcome
 from extensions import db
-from kubernetes.client.rest import ApiException
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -222,7 +221,9 @@ class MdrunJob(db.Model):  # type: ignore
             self.record_usage(UsageOutcome(new.value))
             try:
                 self.delete()
-            except ApiException as e:
+            except k8s_client.K8S_ERRORS as e:
+                # No answer says nothing about the Job: the next read retries the whole transition.
+                if not k8s_client.answered(e):
+                    raise
                 # Kubernetes answered, so the outcome stands and ttlSecondsAfterFinished removes the Job.
-                # No answer propagates instead: the next read retries the whole transition.
                 logger.warning("Cleanup of %s job %s failed: %s", new, self.job_name, k8s_client.describe_error(e))
