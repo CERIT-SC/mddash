@@ -7,13 +7,16 @@ import k8s_client
 from config import NAMESPACE
 from enums import JobStatus, UsageOutcome
 from extensions import db
+from kubernetes.client.rest import ApiException
 from sqlalchemy import update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from urllib3.exceptions import HTTPError
 
 logger = logging.getLogger(__name__)
 
 _TERMINAL = frozenset({JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED})
+_K8S_ERRORS = (ApiException, HTTPError)
 
 
 class MdrunUsage(db.Model):  # type: ignore
@@ -130,7 +133,11 @@ class MdrunJob(db.Model):  # type: ignore
 
     @property
     def status(self) -> JobStatus:
-        """The current job status from Kubernetes; the database row is updated as a side effect."""
+        """
+        The current job status from Kubernetes; the database row is updated as a side effect.
+
+        A failed read raises and leaves the row, the usage window, and the Job as they are.
+        """
         # STOPPED is sticky: the row outlives its K8s job, which K8s still reports
         # as RUNNING through the graceful-deletion window. Trusting it would resurrect the row.
         if self.last_status == JobStatus.STOPPED:
@@ -169,7 +176,12 @@ class MdrunJob(db.Model):  # type: ignore
         k8s_client.delete_job(
             ns=NAMESPACE, name=self.job_name, grace_period_seconds=k8s_client.STOP_GRACE_PERIOD_SECONDS
         )
-        outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+        try:
+            outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+        except _K8S_ERRORS:
+            # The delete went through: the stop holds whatever the outcome was.
+            logger.warning("Outcome of stopped job %s is unreadable", self.job_name, exc_info=True)
+            outcome = JobStatus.STOPPED
         self.last_status = JobStatus.FINISHED if outcome == JobStatus.FINISHED else JobStatus.STOPPED
         db.session.commit()
 
@@ -210,4 +222,8 @@ class MdrunJob(db.Model):  # type: ignore
         elif new in {JobStatus.FINISHED, JobStatus.ERROR}:
             # Before the delete: it removes the pod and its timestamps, and concurrent reads must find the window closed.
             self.record_usage(UsageOutcome(new.value))
-            self.delete()
+            try:
+                self.delete()
+            except _K8S_ERRORS:
+                # The outcome is real either way; ttlSecondsAfterFinished removes the Job.
+                logger.warning("Cleanup of %s job %s failed", new, self.job_name, exc_info=True)
