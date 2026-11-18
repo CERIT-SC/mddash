@@ -34,14 +34,17 @@ On the dashboard Home page, click the **"New"** button next to the "My Experimen
 3. **Fill the form.** Clicking a card (or "Use custom workflow") opens the creation dialog on top of the page, titled **"New Experiment: \<workflow name\>"** (or "Custom workflow"). It asks for:
    - **Name.** Free text (required), placeholder "Enter the name of the experiment".
    - **MD engine.** GROMACS or AMBER toggle (custom only; fixed for the lifetime of the experiment).
-   - **Initial data.** A toggle with three mutually exclusive sources (default **PDB**):
+   - **Initial data.** A toggle with four mutually exclusive sources (default **PDB**):
      - **PDB.** Field "PDB ID or URL": an RCSB PDB ID (e.g. `1ABC`) or a direct URL to a `.pdb` file; MDDash downloads the structure from RCSB PDB.
      - **Upload files.** Drag-and-drop or click the dropzone ("Drop files here or click to browse"). Selected files are listed with name and size. Use this to bring existing `.tpr`/`.gro`/`.prmtop`/`.inpcrd`/`.mdin` files.
      - **DOI / repository.** Field "DOI or Repository URL": a DOI link or a URL of any InvenioRDM repository (Zenodo, MDRepo) to import data from.
+     - **Datahugger-NG.** Field "Repository URL": a public HTTP(S) repository URL recognized by [Datahugger-NG](https://github.com/EOSC-Data-Commons/datahugger-ng). The complete repository is downloaded in the background, so the dialog switches to a "Downloading the repository…" state instead of creating the experiment immediately.
    - **Notebooks repository** (custom only). A git URL for the workflow notebooks, prefilled with the deployment's default repository. It supports Binder-compatible and standard repos. For private HTTPS repositories, expand **"Private repository? Provide an access token"** and paste a git token. MDDash uses it only for cloning and does not store it (SSH-style URLs hide this field).
 4. Click **"Create Experiment"**. Missing required fields show inline messages under each field (e.g. "Enter a name for the experiment", "Add at least one file").
 
 On success the dialog closes with the toast `Experiment "…" created` and the browser navigates into the new experiment's **wizard**. The selected notebooks repository is cloned into the experiment directory and the input data is fetched.
+
+A **Datahugger-NG** experiment is created asynchronously: the submit button becomes **Close** and stays disabled while the download runs, and closing the dialog does not cancel it. The experiment appears only once the download and its merge with the notebooks succeed, and the dialog opens it automatically at that point. If the download fails, the dialog shows the failure inline (the experiment is never left half-populated).
 
 ## What new users should know
 

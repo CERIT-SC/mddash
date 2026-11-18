@@ -35,6 +35,8 @@ from modules.mdrepo.tokens import MDRepoTokenManager
 from modules.notebooks.catalog import NotebookModule, load_catalog
 from modules.notebooks.models import Notebook
 from modules.notebooks.service import NotebookService
+from modules.population.models import PopulationOperation
+from modules.population.service import PopulationService
 from modules.publishing.service import PublishingService, needs_mdrepo_sync
 from modules.publishing.status import UploadState
 
@@ -56,6 +58,7 @@ class ExperimentService:
         self.notebooks = NotebookService(clients)
         self.publishing = PublishingService(session, clients)
         self.archive = ArchiveService(session, clients)
+        self.population = PopulationService(session, clients)
 
     # --- reads ----------------------------------------------------------------------
 
@@ -111,6 +114,31 @@ class ExperimentService:
         Raises:
             BadRequest: If the notebook module, repository, or source data is invalid.
         """
+        repo, access_token, module = self._resolve_notebooks(notebooks_repo, access_token, notebook_module_id, engine)
+
+        match source_type:
+            case "pdb" if pdb:
+                return await self.from_pdb(name, pdb, repo, access_token, engine=engine, notebook_module=module)
+            case "repo" if repo_url:
+                return await self.from_repo(name, repo_url, repo, access_token, engine=engine, notebook_module=module)
+            case "file" if files:
+                return await self.from_files(name, files, repo, access_token, engine=engine, notebook_module=module)
+            case _:
+                raise BadRequest("Invalid experiment type or missing data.")
+
+    def _resolve_notebooks(
+        self,
+        notebooks_repo: str | None,
+        access_token: str | None,
+        notebook_module_id: str | None,
+        engine: Engine,
+    ) -> tuple[str, str | None, NotebookModule | None]:
+        """
+        Resolve (notebooks repo, access token, curated module) for a creation.
+
+        Raises:
+            BadRequest: If the notebook module or repository is invalid.
+        """
         repo = notebooks_repo if notebooks_repo is not None else DEFAULT_NOTEBOOKS_REPO
         module = None
         if notebook_module_id:
@@ -126,16 +154,7 @@ class ExperimentService:
             access_token = None
         else:
             validate_git_url(repo)
-
-        match source_type:
-            case "pdb" if pdb:
-                return await self.from_pdb(name, pdb, repo, access_token, engine=engine, notebook_module=module)
-            case "repo" if repo_url:
-                return await self.from_repo(name, repo_url, repo, access_token, engine=engine, notebook_module=module)
-            case "file" if files:
-                return await self.from_files(name, files, repo, access_token, engine=engine, notebook_module=module)
-            case _:
-                raise BadRequest("Invalid experiment type or missing data.")
+        return repo, access_token, module
 
     async def prepare_env(
         self, notebooks_repo: str, access_token: str | None = None, notebook_module: NotebookModule | None = None
@@ -299,6 +318,40 @@ class ExperimentService:
 
         return await self._create(
             experiment_id, populate, name=name, **self._module_columns(engine, notebooks_repo, notebook_module)
+        )
+
+    async def create_population(
+        self,
+        name: str,
+        dataset_url: str,
+        *,
+        notebooks_repo: str | None = None,
+        access_token: str | None = None,
+        notebook_module_id: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> PopulationOperation:
+        """
+        Create an experiment populated by Datahugger-NG in the background.
+
+        Notebooks are prepared synchronously (a custom notebook access token is
+        consumed by that clone only, never persisted); the dataset download runs
+        as a one-shot worker and the Experiment is created only after a safe merge.
+
+        Invalid inputs raise ``BadRequest`` (see ``validate_http_url`` and
+        ``_resolve_notebooks``); a worker submission failure raises ``ApiError``
+        (upstream-unavailable, see ``population.submit``).
+        """
+        url = validate_http_url(dataset_url)
+        repo, access_token, module = self._resolve_notebooks(notebooks_repo, access_token, notebook_module_id, engine)
+        experiment_id = await self.prepare_env(repo, access_token, module)
+        return await self.population.submit(
+            experiment_id=experiment_id,
+            name=name,
+            repo_url=url,
+            notebooks_repo=repo,
+            engine=engine,
+            module_name=module.name if module else None,
+            module_category=module.category if module else None,
         )
 
     # --- changes --------------------------------------------------------------------

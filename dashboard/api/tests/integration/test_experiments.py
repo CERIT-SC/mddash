@@ -4,6 +4,7 @@ Integration tests for experiment API routes.
 Tests the full request/response cycle with mocked external dependencies.
 """
 
+import json
 from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
@@ -13,12 +14,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 import respx
+from clients import Clients
+from core.enums import PopulationStatus
 from core.errors import InternalServerError
 from core.utils import secure_filename
 from fastapi import FastAPI
 from httpx import AsyncClient
 from modules.mdrepo.dependencies import get_tokens
 from modules.models import Experiment, Notebook
+from modules.population.models import PopulationOperation
+from modules.population.submission import job_name
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 from tests.support import SeedExperiment
 
@@ -657,6 +663,233 @@ class TestCreateExperimentCuratedModule:
             # Root-path module uses full clone, not sparse checkout
             git.clone.assert_called_once()
             git.clone_module.assert_not_called()
+
+
+def _datahugger_form(name: str = "Datahugger Experiment", **fields: str | None) -> dict[str, str]:
+    """Multipart form for a Datahugger creation (a None value drops the field)."""
+    form: dict[str, str] = {
+        "type": "datahugger",
+        "experiment-name": name,
+        "repo-url": "https://github.com/test/dataset",
+        "notebooks-repo": "https://github.com/test/repo.git",
+    }
+    for key, value in fields.items():
+        form_key = key.replace("_", "-")
+        if value is not None:
+            form[form_key] = value
+        else:
+            form.pop(form_key, None)
+    return form
+
+
+@pytest.fixture
+def population_k8s(clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock]) -> Iterator[SimpleNamespace]:
+    """Admit population pods at once and report deleted worker Jobs as gone at once."""
+    with (
+        patch.object(clients.k8s, "wait_for_pod_admission", AsyncMock(return_value=True)) as admit,
+        patch.object(clients.k8s, "wait_for_resource_absence", AsyncMock(return_value=True)),
+    ):
+        yield SimpleNamespace(admit=admit, batch_v1=mock_k8s[1])
+
+
+class TestCreateDatahugger:
+    """Tests for POST /api/experiments with type=datahugger (asynchronous population)."""
+
+    async def test_create_datahugger_returns_202_and_submits_worker(
+        self,
+        client: AsyncClient,
+        db_session: Session,
+        git: SimpleNamespace,
+        population_k8s: SimpleNamespace,
+    ) -> None:
+        """Queues a population: 202 with identifiers, notebooks prepared, no experiment yet."""
+        response = await client.post("/dash/api/experiments", data=_datahugger_form())
+
+        assert response.status_code == HTTPStatus.ACCEPTED
+        data = response.json()
+        assert len(data["operation_id"]) == 16
+        assert len(data["experiment_id"]) == EXPERIMENT_ID_LENGTH
+
+        # Notebooks are prepared synchronously, before the 202.
+        git.clone.assert_called_once()
+
+        # The one-shot worker Job is submitted under its deterministic name and admitted.
+        batch_v1 = population_k8s.batch_v1
+        batch_v1.create_namespaced_job.assert_awaited_once()
+        manifest = batch_v1.create_namespaced_job.await_args.kwargs["body"]
+        assert manifest["metadata"]["name"] == job_name(data["operation_id"])
+        population_k8s.admit.assert_awaited_once()
+
+        # The experiment stays hidden until the download succeeds.
+        assert (await client.get("/dash/api/experiments")).json() == []
+        assert (await client.get(f"/dash/api/experiments/{data['experiment_id']}")).status_code == HTTPStatus.NOT_FOUND
+
+        operation = (await db_session.execute(select(PopulationOperation))).scalars().one()
+        assert operation.status is PopulationStatus.queued
+        assert operation.repo_url == "https://github.com/test/dataset"
+        assert operation.job_name == job_name(operation.id)
+
+    async def test_create_datahugger_worker_manifest_is_tokenless_and_bounded(
+        self, client: AsyncClient, git: SimpleNamespace, population_k8s: SimpleNamespace
+    ) -> None:
+        """The worker reuses the API image, is bounded and non-root, and carries no credentials."""
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_datahugger_form(access_token="secret-notebook-token"),
+        )
+
+        assert response.status_code == HTTPStatus.ACCEPTED
+        data = response.json()
+        manifest = population_k8s.batch_v1.create_namespaced_job.await_args.kwargs["body"]
+        pod_spec = manifest["spec"]["template"]["spec"]
+        container = pod_spec["containers"][0]
+
+        # The Dashboard API image runs the worker; only public arguments travel with it.
+        assert container["image"] == "test-api"
+        assert container["command"] == ["python", "-m", "modules.population.worker"]
+        assert container["args"] == [
+            "--operation-id",
+            data["operation_id"],
+            "--experiment-id",
+            data["experiment_id"],
+            "--repo-url",
+            "https://github.com/test/dataset",
+        ]
+        assert container["env"] == []
+        assert "secret-notebook-token" not in json.dumps(manifest)
+
+        # Bounded, retry-free, non-root, on the shared PVC.
+        assert manifest["spec"]["backoffLimit"] == 0
+        assert manifest["spec"]["activeDeadlineSeconds"] == 86400
+        assert pod_spec["restartPolicy"] == "Never"
+        assert pod_spec["automountServiceAccountToken"] is False
+        assert pod_spec["securityContext"]["runAsNonRoot"] is True
+        assert container["securityContext"]["runAsUser"] == 1000
+        assert container["securityContext"]["runAsGroup"] == 1000
+        assert pod_spec["volumes"][0]["persistentVolumeClaim"]["claimName"] == "test-pvc"
+        assert container["volumeMounts"][0]["mountPath"] == "/mddash"
+
+    async def test_create_datahugger_curated_module_resolves_server_side(
+        self,
+        client: AsyncClient,
+        db_session: Session,
+        tmp_path: Path,
+        git: SimpleNamespace,
+        population_k8s: SimpleNamespace,
+    ) -> None:
+        """Curated notebooks use the selective checkout; the client URL is never trusted."""
+        with (
+            patch("modules.experiments.service.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
+        ):
+            response = await client.post(
+                "/dash/api/experiments",
+                data=_datahugger_form(notebook_module="gromacs-protein", notebooks_repo=None),
+            )
+
+        assert response.status_code == HTTPStatus.ACCEPTED
+        git.clone_module.assert_called_once()
+        git.clone.assert_not_called()
+
+        operation = (await db_session.execute(select(PopulationOperation))).scalars().one()
+        assert operation.notebooks_repo == "https://github.com/default/repo.git"
+        assert operation.module_name == "Protein"
+        assert operation.module_category == "protein"
+
+    async def test_create_datahugger_missing_repo_url_rejected(
+        self, client: AsyncClient, population_k8s: SimpleNamespace
+    ) -> None:
+        """A datahugger creation without a repository URL is a 400 and submits nothing."""
+        response = await client.post("/dash/api/experiments", data=_datahugger_form(repo_url=None))
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        population_k8s.batch_v1.create_namespaced_job.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "repo_url",
+        [
+            "file:///etc/passwd",
+            "https://user:pass@github.com/test/dataset",
+        ],
+        ids=["non-http-scheme", "embedded-credentials"],
+    )
+    async def test_create_datahugger_rejects_unsafe_dataset_url(
+        self, client: AsyncClient, repo_url: str, population_k8s: SimpleNamespace
+    ) -> None:
+        """Non-HTTP(S) and credential-bearing dataset URLs are rejected before any side effect."""
+        response = await client.post("/dash/api/experiments", data=_datahugger_form(repo_url=repo_url))
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        population_k8s.batch_v1.create_namespaced_job.assert_not_awaited()
+
+    async def test_create_datahugger_submission_failure_records_durable_failure(
+        self,
+        client: AsyncClient,
+        db_session: Session,
+        tmp_path: Path,
+        clients: Clients,
+        population_k8s: SimpleNamespace,
+    ) -> None:
+        """A submission error returns a safe 500 and leaves a failed operation, no experiment dir."""
+        with patch.object(clients.k8s, "create_job_raw", AsyncMock(side_effect=RuntimeError("k8s boom"))):
+            response = await client.post("/dash/api/experiments", data=_datahugger_form())
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.headers["content-type"].split(";")[0] == "application/problem+json"
+        assert response.json()["detail"] == "The repository download could not be started."
+
+        operation = (await db_session.execute(select(PopulationOperation))).scalars().one()
+        assert operation.status is PopulationStatus.failed
+        assert operation.error == "The repository download could not be started."
+        assert operation.finished_at is not None
+        assert not (tmp_path / operation.experiment_id).exists()
+        assert not (tmp_path / ".cache").exists()
+
+    async def test_create_datahugger_admission_timeout_records_durable_failure(
+        self,
+        client: AsyncClient,
+        db_session: Session,
+        tmp_path: Path,
+        clients: Clients,
+        population_k8s: SimpleNamespace,
+    ) -> None:
+        """A pod that is never admitted deletes the Job and records a failed operation."""
+        population_k8s.admit.return_value = False
+
+        response = await client.post("/dash/api/experiments", data=_datahugger_form())
+
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.json()["detail"] == "The repository download could not be started."
+
+        operation = (await db_session.execute(select(PopulationOperation))).scalars().one()
+        assert operation.status is PopulationStatus.failed
+        assert not (tmp_path / operation.experiment_id).exists()
+        population_k8s.batch_v1.delete_namespaced_job.assert_awaited()
+
+
+class TestPopulationJobStatus:
+    """Tests for GET /api/experiment-population-jobs/<operation_id>."""
+
+    async def test_status_reports_operation(
+        self, client: AsyncClient, git: SimpleNamespace, population_k8s: SimpleNamespace
+    ) -> None:
+        """A queued operation is reported read-only until the monitor reconciles it."""
+        created = (await client.post("/dash/api/experiments", data=_datahugger_form())).json()
+
+        response = await client.get(f"/dash/api/experiment-population-jobs/{created['operation_id']}")
+
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "operation_id": created["operation_id"],
+            "experiment_id": created["experiment_id"],
+            "status": "queued",
+            "error": None,
+        }
+
+    async def test_status_unknown_operation_404(self, client: AsyncClient) -> None:
+        """An unknown operation ID is a 404."""
+        response = await client.get("/dash/api/experiment-population-jobs/ffffffffffffffff")
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestEditExperiment:

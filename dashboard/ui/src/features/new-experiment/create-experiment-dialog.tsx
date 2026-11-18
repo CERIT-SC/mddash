@@ -1,14 +1,18 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { toApiError } from "@/api/errors"
-import { getListExperimentsQueryKey, useCreateExperiment } from "@/api/generated/client"
-import type { CreateExperimentForm, NotebookModule } from "@/api/generated/models"
+import { getListExperimentsQueryKey, useCreateExperiment, useGetExperimentPopulationJob } from "@/api/generated/client"
+import type { CreateExperimentForm, NotebookModule, PopulationJob } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
 import { CustomWorkflowIcon, ModuleIcon } from "@/shared/module-icon"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
+import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
   cn,
   Dialog,
@@ -38,6 +42,11 @@ import { useForm, useWatch } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
+import { pollWhilePopulationActive } from "./population-state"
+
+/** Poll cadence for the population status while the download worker is active. */
+const POPULATION_POLL_MS = 3000
+
 /** SSH (git@host:owner/repo.git) or HTTP(S) with a host. */
 function isGitUrl(url: string): boolean {
   if (url.startsWith("git@") && url.includes(":")) return true
@@ -49,12 +58,21 @@ function isGitUrl(url: string): boolean {
   }
 }
 
+/** Public http(s) URL: Datahugger-NG fetches it unauthenticated. */
+function isHttpUrl(url: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
 function buildSchema(requireRepo: boolean) {
   return z
     .object({
       name: z.string().trim().min(1, "Enter a name for the experiment"),
       engine: z.enum(["GMX", "AMBER"]),
-      source: z.enum(["pdb", "file", "repo"]),
+      source: z.enum(["pdb", "file", "repo", "datahugger"]),
       pdb: z.string(),
       repoUrl: z.string(),
       notebooksRepo: z.string(),
@@ -67,6 +85,9 @@ function buildSchema(requireRepo: boolean) {
       }
       if (values.source === "repo" && values.repoUrl.trim() === "") {
         ctx.addIssue({ code: "custom", path: ["repoUrl"], message: "Enter a DOI or repository URL" })
+      }
+      if (values.source === "datahugger" && !isHttpUrl(values.repoUrl.trim())) {
+        ctx.addIssue({ code: "custom", path: ["repoUrl"], message: "Enter a valid http(s) repository URL" })
       }
       if (values.source === "file" && values.files.length === 0) {
         ctx.addIssue({ code: "custom", path: ["files"], message: "Add at least one file" })
@@ -168,9 +189,26 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
   const notebooksRepoValue = useWatch({ control: form.control, name: "notebooksRepo" })
   const isHttpsRepo = notebooksRepoValue.trim().startsWith("https://")
 
+  // A 202 response switches the dialog to following the population operation:
+  // the experiment exists only after the background download succeeds.
+  const [operation, setOperation] = useState<PopulationJob | null>(null)
+  const population = useGetExperimentPopulationJob(operation?.operation_id ?? "", {
+    query: {
+      enabled: operation !== null,
+      retry: false,
+      refetchInterval: pollWhilePopulationActive(POPULATION_POLL_MS),
+    },
+  })
+  const populationStatus = population.data?.data.status
+  const populationFailed = populationStatus === "failed"
+
   const create = useCreateExperiment({
     mutation: {
       onSuccess: (response) => {
+        if (response.status === 202) {
+          setOperation(response.data)
+          return
+        }
         toast.success(`Experiment “${response.data.name}” created`)
         void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
         onClose()
@@ -180,10 +218,21 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
     },
   })
 
+  // A succeeded population opens the now-existing experiment, like a 201 creation.
+  useEffect(() => {
+    if (!operation || populationStatus !== "succeeded") return
+    toast.success(`Experiment “${form.getValues("name").trim()}” ready`)
+    void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
+    onClose()
+    void navigate({ to: "/experiments/$experimentId", params: { experimentId: operation.experiment_id } })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operation, populationStatus])
+
   function onSubmit(values: FormValues) {
+    if (operation) return // population already active; duplicate submits are disabled
     const data: CreateExperimentForm = { "experiment-name": values.name.trim(), type: values.source }
     if (values.source === "pdb") data.pdb = values.pdb.trim()
-    if (values.source === "repo") data["repo-url"] = values.repoUrl.trim()
+    if (values.source === "repo" || values.source === "datahugger") data["repo-url"] = values.repoUrl.trim()
     if (values.source === "file") data["simulation-files"] = values.files
     if (isCustom) {
       const repo = values.notebooksRepo.trim()
@@ -279,6 +328,7 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                         <TabsTrigger value="pdb">PDB</TabsTrigger>
                         <TabsTrigger value="file">Upload Files</TabsTrigger>
                         <TabsTrigger value="repo">DOI / Repository</TabsTrigger>
+                        <TabsTrigger value="datahugger">Datahugger-NG</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </FormControl>
@@ -337,6 +387,45 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                 )}
               />
             )}
+            {source === "datahugger" && (
+              <FormField
+                control={form.control}
+                name="repoUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repository URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. https://github.com/owner/dataset" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      A public repository recognized by Datahugger-NG. The full repository is downloaded in the
+                      background before the experiment is ready.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {operation &&
+              (populationFailed ? (
+                <Alert role="alert" variant="error">
+                  <AlertTitle>Experiment creation failed</AlertTitle>
+                  <AlertDescription>
+                    <p>{population.data?.data.error ?? "The repository download failed."}</p>
+                  </AlertDescription>
+                </Alert>
+              ) : population.isError ? (
+                <ApiErrorAlert error={population.error} onRetry={() => void population.refetch()} />
+              ) : populationStatus !== "succeeded" ? (
+                <div className="text-text-muted bg-surface flex items-center gap-2 rounded-md border p-3 text-sm">
+                  <LoaderCircle className="animate-spin" aria-hidden="true" />
+                  <span>
+                    Downloading the repository… You can close this dialog; the download continues in the background and
+                    the experiment opens when it is ready.
+                  </span>
+                </div>
+              ) : null)}
 
             {isCustom && (
               <>
@@ -401,9 +490,9 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                Cancel
+                {operation ? "Close" : "Cancel"}
               </Button>
-              <Button type="submit" disabled={create.isPending}>
+              <Button type="submit" disabled={create.isPending || operation !== null}>
                 {create.isPending && <LoaderCircle className="animate-spin" aria-hidden="true" />}
                 {create.isPending ? "Creating…" : "Create Experiment"}
               </Button>

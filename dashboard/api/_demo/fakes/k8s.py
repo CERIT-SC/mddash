@@ -18,6 +18,7 @@ from core.config import DATA_DIR
 from core.enums import JobStatus, NotebookTier, PodStatus
 from modules.archive.status import ArchiveStatus
 from modules.archive.status import write_status as write_archive_status
+from modules.population.receipt import write_receipt as write_population_receipt
 from modules.publishing.status import UploadStatus, read_status
 from modules.publishing.status import write_status as write_upload_status
 from modules.publishing.submission import EXPERIMENT_LABEL
@@ -33,14 +34,25 @@ ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 # MDRepo upload job duration in seconds (0.5s in E2E mode)
 UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
+# Datahugger population job duration in seconds (0.5s in E2E mode)
+POPULATION_JOB_DURATION_SEC = 0.5 if E2E else 2.0
+
 
 def _create_job_raw(manifest: dict) -> None:
-    """Simulate the MDRepo upload and archive workers: mark done after a short delay."""
+    """Simulate the MDRepo upload, archive, and Datahugger population workers: mark done after a short delay."""
     try:
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
         args = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
     except (KeyError, IndexError, ValueError):
+        return
+
+    # The population worker's args start with --operation-id.
+    if args and args[0] == "--operation-id":
+        operation_id = args[args.index("--operation-id") + 1]
+        repo_url = args[args.index("--repo-url") + 1] if "--repo-url" in args else ""
+        demo_state.population_jobs[job_name] = operation_id
+        threading.Thread(target=_finish_population_job, args=(job_name, operation_id, repo_url), daemon=True).start()
         return
 
     # Archive worker args start with the mode; the upload worker's with --experiment-id.
@@ -117,10 +129,38 @@ def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> Non
     mdrepo_status_cache.clear()
 
 
-def _read_upload_job(name: str) -> SimpleNamespace | None:
-    if name not in demo_state.upload_jobs:
-        return None
-    return SimpleNamespace(status=SimpleNamespace(active=1))
+def _finish_population_job(job_name: str, operation_id: str, repo_url: str) -> None:
+    """
+    Stand-in for the Datahugger population worker.
+
+    Stages deterministic dataset content and writes a valid success receipt
+    (no external repository access). A repository URL containing "demo-fail"
+    deterministically fails the download instead.
+    """
+    time.sleep(POPULATION_JOB_DURATION_SEC)
+
+    from modules.population.receipt import staging_dir  # ruff:ignore[import-outside-top-level]
+    from modules.population.worker import RECEIPT_ERROR_DOWNLOAD_FAILED  # ruff:ignore[import-outside-top-level]
+
+    if "demo-fail" in repo_url:
+        write_population_receipt(operation_id, "failed", RECEIPT_ERROR_DOWNLOAD_FAILED)
+        demo_state.population_jobs.pop(job_name, None)
+        return
+
+    data = staging_dir(operation_id)
+    (data / "files").mkdir(parents=True, exist_ok=True)
+    (data / "files" / "demo-dataset.pdb").write_text(
+        "HEADER    DEMO DATASET\nATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N\nEND\n"
+    )
+    (data / "dataset-info.txt").write_text("Simulated Datahugger-NG dataset for the MDDash demo.\n")
+    write_population_receipt(operation_id, "succeeded")
+    demo_state.population_jobs.pop(job_name, None)
+
+
+def _read_worker_job(name: str) -> SimpleNamespace | None:
+    if name in demo_state.upload_jobs or name in demo_state.population_jobs:
+        return SimpleNamespace(status=SimpleNamespace(active=1))
+    return None
 
 
 def _get_pod_info(name: str) -> tuple[PodStatus, "datetime | None"]:
@@ -205,6 +245,8 @@ def _get_job_status(name: str) -> JobStatus:
     Returns:
         The job status for the given job name.
     """
+    if name in demo_state.population_jobs:
+        return JobStatus.RUNNING
     job_data = demo_state.analysis_jobs.get(name)
     if job_data is None:
         return JobStatus.UNKNOWN
@@ -326,12 +368,13 @@ class DemoK8sClient(K8sClient):
         return True
 
     async def read_job(self, name: str) -> object | None:
-        """Upload/archive worker Job while its thread runs."""
-        return _read_upload_job(name)
+        """Worker Job (upload/archive/population) while its thread runs."""
+        return _read_worker_job(name)
 
     async def delete_job_foreground(self, name: str) -> None:
         """Forget a worker Job."""
         demo_state.upload_jobs.pop(name, None)
+        demo_state.population_jobs.pop(name, None)
 
     async def wait_for_resource_absence(
         self,

@@ -61,6 +61,8 @@ import type {
   Notebook,
   NotebookConfig,
   NotebookModule,
+  PopulationJob,
+  PopulationOperationStatus,
   Problem,
   PublishRequest,
   PublishStatus,
@@ -900,6 +902,11 @@ export type createExperimentResponse201 = {
   status: 201
 }
 
+export type createExperimentResponse202 = {
+  data: PopulationJob
+  status: 202
+}
+
 export type createExperimentResponse400 = {
   data: Problem
   status: 400
@@ -907,10 +914,10 @@ export type createExperimentResponse400 = {
 
 export type createExperimentResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 400>
+  status: Exclude<HTTPStatusCodes, 201 | 202 | 400>
 }
 
-export type createExperimentResponseSuccess = (createExperimentResponse201) & {
+export type createExperimentResponseSuccess = (createExperimentResponse201 | createExperimentResponse202) & {
   headers: Headers;
 };
 export type createExperimentResponseError = (createExperimentResponse400 | createExperimentResponseDefault) & {
@@ -926,7 +933,11 @@ export const getCreateExperimentUrl = () => {
 }
 
 /**
- * Create a new experiment from PDB, repository URL, or uploaded files.
+ * Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
+ *
+ * Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
+ * one-shot download worker, and returns the operation to follow instead of an
+ * experiment (the experiment appears only after the download succeeds).
  * @summary Create an experiment
  */
 export const createExperiment = async (createExperimentForm: CreateExperimentForm, options?: RequestInit): Promise<createExperimentResponseSuccess> => {
@@ -1413,6 +1424,148 @@ export const useDeleteExperiment = <TError = globalThis.Error & { info?: Problem
       > => {
       return useMutation(getDeleteExperimentMutationOptions(options), queryClient);
     }
+
+export type getExperimentPopulationJobResponse200 = {
+  data: PopulationOperationStatus
+  status: 200
+}
+
+export type getExperimentPopulationJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getExperimentPopulationJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getExperimentPopulationJobResponseSuccess = (getExperimentPopulationJobResponse200) & {
+  headers: Headers;
+};
+export type getExperimentPopulationJobResponseError = (getExperimentPopulationJobResponse404 | getExperimentPopulationJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetExperimentPopulationJobUrl = (operationId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiment-population-jobs/${operationId}`
+}
+
+/**
+ * Read-only status of a Datahugger-NG population operation.
+ *
+ * Reconciliation (finalization and failure handling) is owned by the app
+ * lifespan monitor; this endpoint never mutates state.
+ * @summary Get a population operation
+ */
+export const getExperimentPopulationJob = async (operationId: string, options?: RequestInit): Promise<getExperimentPopulationJobResponseSuccess> => {
+
+  const res = await fetch(getGetExperimentPopulationJobUrl(operationId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getExperimentPopulationJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getExperimentPopulationJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getExperimentPopulationJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getExperimentPopulationJobResponseSuccess
+}
+
+
+
+
+
+export const getGetExperimentPopulationJobQueryKey = (operationId: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiment-population-jobs/${operationId}`
+    ] as const;
+    }
+
+
+export const getGetExperimentPopulationJobQueryOptions = <TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExperimentPopulationJobQueryKey(operationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExperimentPopulationJob>>> = ({ signal }) => getExperimentPopulationJob(operationId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: operationId !== null && operationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetExperimentPopulationJobQueryResult = NonNullable<Awaited<ReturnType<typeof getExperimentPopulationJob>>>
+export type GetExperimentPopulationJobQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>,
+          TError,
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>,
+          TError,
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a population operation
+ */
+
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetExperimentPopulationJobQueryOptions(operationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export type publishExperimentResponse201 = {
   data: MDPositPublication

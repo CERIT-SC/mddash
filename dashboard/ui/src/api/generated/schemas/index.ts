@@ -182,7 +182,11 @@ export const ListExperimentsResponse = zod.array(ListExperimentsResponseItem)
 
 
 /**
- * Create a new experiment from PDB, repository URL, or uploaded files.
+ * Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
+ *
+ * Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
+ * one-shot download worker, and returns the operation to follow instead of an
+ * experiment (the experiment appears only after the download succeeds).
  * @summary Create an experiment
  */
 
@@ -190,7 +194,7 @@ export const createExperimentBodyEngineDefault = `GMX`;
 
 export const CreateExperimentBody = zod.object({
   "experiment-name": zod.string().min(1),
-  "type": zod.enum(['pdb', 'repo', 'file']),
+  "type": zod.enum(['pdb', 'repo', 'file', 'datahugger']),
   "simulation-files": zod.array(zod.instanceof(Blob)).optional(),
   "pdb": zod.union([zod.string(),zod.null()]).optional(),
   "repo-url": zod.union([zod.string(),zod.null()]).optional(),
@@ -559,6 +563,28 @@ export const DeleteExperimentParams = zod.object({
 })
 
 export const DeleteExperimentResponse = zod.void()
+
+
+/**
+ * Read-only status of a Datahugger-NG population operation.
+ *
+ * Reconciliation (finalization and failure handling) is owned by the app
+ * lifespan monitor; this endpoint never mutates state.
+ * @summary Get a population operation
+ */
+
+
+
+export const GetExperimentPopulationJobParams = zod.object({
+  "operation_id": zod.string().min(1)
+})
+
+export const GetExperimentPopulationJobResponse = zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Read-only status of a Datahugger-NG population operation.')
 
 
 /**
