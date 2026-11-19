@@ -8,6 +8,7 @@ from core.enums.notebook_tier import NotebookTier
 from core.enums.pod_status import PodStatus
 from core.enums.preprocessing_mode import PreprocessingMode
 from core.enums.source_type import SourceType
+from core.enums.step import Step
 
 __all__ = [
     "AmberBinary",
@@ -20,4 +21,5 @@ __all__ = [
     "PodStatus",
     "PreprocessingMode",
     "SourceType",
+    "Step",
 ]

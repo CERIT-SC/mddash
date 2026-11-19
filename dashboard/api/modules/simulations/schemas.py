@@ -2,7 +2,7 @@
 
 from typing import Annotated, Any
 
-from core.enums import Engine
+from core.enums import Engine, Step
 from core.schemas import OrmModel
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
@@ -43,8 +43,8 @@ class Simulation(OrmModel):
     valid: bool
     errors: list[str]
     missing_files: list[str]
-    # Wizard phase index (Setup 0, Tune 1, Run 2, Analyze 3); publish is experiment-level.
-    step: Annotated[int, Field(ge=0, le=3)]
+    # Furthest wizard step this simulation can open; publish is experiment-level.
+    step: Step
     status: str
     # True while any tuner or production job for this simulation may still advance on its own.
     live: bool

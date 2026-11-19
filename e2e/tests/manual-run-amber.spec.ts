@@ -4,7 +4,6 @@ import { expect, test } from "@playwright/test"
 // Manual configuration submits an AMBER job that finishes through the staged E2E schedule.
 test("manual configuration: submit an AMBER production run", async ({ page }) => {
   await page.goto("experiments/iiiii")
-  await page.getByRole("button", { name: /Go to section 2: Tune/ }).click()
 
   await page.getByRole("tab", { name: "Manual configuration" }).click()
   await page.getByRole("combobox", { name: "Binary" }).click()

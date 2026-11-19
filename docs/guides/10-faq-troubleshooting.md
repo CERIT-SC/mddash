@@ -8,7 +8,7 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 **Where is the logout button?** In the dashboard header (top right, "Log out"), and on the JupyterHub pages reachable via the header's "Home" link.
 
-**How do I get to JupyterLab?** From an experiment's Setup or Analyze step, start its notebook and click **"Open notebook"**. JupyterLab opens in a new tab deep-linked to the setup/analysis notebook. While the notebook is running, the notebook status bar under the header (present on every experiment page) also carries "Open notebook".
+**How do I get to JupyterLab?** From an experiment's Setup or Analysis card, start its notebook and click **"Open notebook"**. JupyterLab opens in a new tab deep-linked to the setup/analysis notebook. While the notebook is running, the notebook status bar under the header (present on every experiment page) also carries "Open notebook".
 
 **How do I rename an experiment?** Either from the Home page (the card's ⋯ menu, then "Rename") or in the wizard (the pencil chip next to the "Experiment" title).
 
@@ -22,7 +22,7 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 **What is a workflow / preset?** The git repository of notebooks cloned into the experiment. It provides `setup.ipynb` and `analysis.ipynb`. Curated workflows are the cards on the New Experiment page, grouped by engine and simulation category. Any custom git repository works instead ("Use custom workflow". Binder-compatible supported; private HTTPS repos accept an access token used only for cloning).
 
-**The wizard step I want is greyed out.** Steps unlock automatically: Tune needs a valid simulation manifest, Run needs tuning results (or a manually configured run), Analyze is reachable while the run is going, Publish needs a finished simulation job or an existing MDRepo draft.
+**The step card I want is locked.** Cards open automatically, and a locked card names what it waits for: Configuration needs a valid simulation manifest, Simulation needs a submitted run, Analysis opens once the run saves its first frames (also mid-run), and the **"Publish…"** button needs a finished or stopped run or an existing MDRepo draft.
 
 ## Simulations and manifests
 
@@ -38,11 +38,11 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 **My run says "Preparing" and nothing happens.** The pod is being scheduled or waiting for resources (possibly a GPU). There is no queue indicator. It will start when resources free up.
 
-**How do I cancel/stop a simulation job?** On the Run step, use **"Stop run"** and confirm in the "Stop this run?" dialog. Stopping keeps the run, its progress so far, and its logs, so you can analyze the partial results or extend the run later. There is no pause. **"Re-run"** restarts with the same configuration, and changing parameters means going back to the Tune step.
+**How do I cancel/stop a simulation job?** In the Simulation card, use **"Stop run"** and confirm in the "Stop this run?" dialog. Stopping keeps the run, its progress so far, and its logs, so you can analyze the partial results or extend the run later. There is no pause. **"Re-run"** restarts with the same configuration, and changing parameters means going back to the Tune step.
 
 **Re-running deleted my previous outputs.** By design. Starting or re-running a run removes previous result files of that simulation (trajectory, structures, logs). Keep copies if you need them.
 
-**Where are my logs?** On the Run step, open the collapsible **"Logs"** section (tabs: Gromacs log / Amber log / Standard output / Standard error). The viewer shows the last 10,000 lines and can follow or copy/download each stream. Logs appear only once the job leaves PENDING.
+**Where are my logs?** In the Simulation card, open the collapsible **"Logs"** section (tabs: Gromacs log / Amber log / Standard output / Standard error). The viewer shows the last 10,000 lines and can follow or copy/download each stream. Logs appear only once the job leaves PENDING.
 
 **AMBER: my .mdin file changed.** Expected. The Ewald preset option rewrites the `&ewald` namelist in the control file in place before each run.
 
@@ -50,7 +50,7 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 ## Tuning, analyzing, publishing
 
-**Do I have to tune?** No. On the Tune step's **"Manual configuration"** tab you can submit a run directly with hand-picked parameters. Tuning reports the fastest (ns/day) and cheapest (est. cost) execution configuration, so it is recommended.
+**Do I have to tune?** No. On Configuration's **"Manual configuration"** tab you can submit a run directly with hand-picked parameters. Tuning reports the fastest (ns/day) and cheapest (est. cost) execution configuration, so it is recommended.
 
 **What do the Fastest / Eco badges mean?** Highlights over finished trials: highest measured ns/day, and lowest estimated full-run cost. The "Suggested" band at the top of the trials table holds both.
 

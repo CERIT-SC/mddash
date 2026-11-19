@@ -41,7 +41,6 @@ import {
   AlertTitle,
   Button,
   buttonVariants,
-  H4,
   Label,
   Separator,
   Skeleton,
@@ -51,7 +50,7 @@ import {
   TabsTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, Clock, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
+import { Clock, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { CustomizeConfigSection } from "./customize-config"
@@ -94,12 +93,13 @@ type TuneStepProps = {
   mode: TuneMode
   onTrialIdChange: (trial: string | undefined) => void
   onModeChange: (mode: TuneMode) => void
-  onStepChange: (step: number) => void
+  /** Called once the production run is submitted, or found already running. */
+  onRunStarted: () => void
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
-/** Tune wizard step: tune hardware configs (or enter one manually) and pick what the run uses. */
+/** Configuration step: tune hardware configs (or enter one manually) and pick what the run uses. */
 export function TuneStep({
   experimentId,
   engine,
@@ -108,7 +108,7 @@ export function TuneStep({
   mode,
   onTrialIdChange,
   onModeChange,
-  onStepChange,
+  onRunStarted,
   pollMs = TUNING_POLL_MS,
 }: TuneStepProps) {
   const queryClient = useQueryClient()
@@ -196,11 +196,11 @@ export function TuneStep({
     void queryClient.invalidateQueries({ queryKey: jobKey })
     void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
-    onStepChange(2)
+    onRunStarted()
   }
 
-  // Run Simulation submits the production job and navigates to Run on success;
-  // a failure stays on Tune with the actionable error.
+  // Run Simulation submits the production job and reports the start on success;
+  // a failure stays in Configuration with the actionable error.
   const submitRunNow = (values: HardwareConfigValues) =>
     submitRun.mutate(
       { experimentId, simulationPath: simulation.simulation_path, data: toJobRequest(engine, values) },
@@ -257,12 +257,9 @@ export function TuneStep({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <H4>Tune your simulation</H4>
-        <p className="text-text-muted text-sm">
-          Tuning runs your simulation briefly across different hardware settings to find the fastest one.
-        </p>
-      </div>
+      <p className="text-text-muted text-sm">
+        Tuning runs your simulation briefly across different hardware settings to find the fastest one.
+      </p>
 
       <Tabs value={mode} onValueChange={(next) => onModeChange(next as TuneMode)}>
         <TabsList aria-label="Configuration method">
@@ -319,10 +316,6 @@ export function TuneStep({
       <Separator />
 
       <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" onClick={() => onStepChange(0)}>
-          <ArrowLeft aria-hidden />
-          Back
-        </Button>
         {/* One submit button for whichever hardware form is active; validity
             (and, in tuning mode, a real pick) gates the submit. */}
         <Button

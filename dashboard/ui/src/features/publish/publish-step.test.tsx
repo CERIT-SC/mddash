@@ -88,7 +88,7 @@ function mockPublish(options: { upload?: PublishStatus; authenticated?: boolean;
 
 function renderPublish(props: Partial<React.ComponentProps<typeof PublishStep>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const spies = { onStepChange: vi.fn(), onOAuthHandled: vi.fn(), ...props }
+  const spies = { onClose: vi.fn(), onOAuthHandled: vi.fn(), ...props }
   render(
     <QueryClientProvider client={client}>
       <PublishStep experiment={experiment("exp1")} simulation={READY_SIMULATION} pollMs={25} {...spies} />
@@ -275,8 +275,8 @@ describe("PublishStep published record", () => {
     await user.click(screen.getByRole("button", { name: "Copy record link" }))
     expect(await navigator.clipboard.readText()).toBe(DRAFT_URL)
 
-    await user.click(screen.getByRole("button", { name: "Back" }))
-    expect(spies.onStepChange).toHaveBeenCalledWith(3)
+    await user.click(screen.getByRole("button", { name: "Close" }))
+    expect(spies.onClose).toHaveBeenCalledTimes(1)
   })
 
   it("keeps the card visible but surfaces a stats fetch failure with a retry", async () => {
@@ -371,7 +371,7 @@ describe("PublishStep publication targets", () => {
           experiment={experiment("exp1")}
           simulation={READY_SIMULATION}
           pollMs={25}
-          onStepChange={noop}
+          onClose={noop}
           onOAuthHandled={noop}
         />
       </QueryClientProvider>
@@ -395,7 +395,7 @@ describe("PublishStep publication targets", () => {
             files: {},
           })}
           pollMs={25}
-          onStepChange={noop}
+          onClose={noop}
           onOAuthHandled={noop}
         />
       </QueryClientProvider>
