@@ -1,8 +1,8 @@
-# Step 4 Analyze
+# Step 4 Analysis
 
-The Analyze step works with a running or finished simulation. It is titled **"Analyze the results"** (*"Each model is a snapshot of your molecule during the simulation. Step through them to see how the structure moved over time, or drag inside the viewer to rotate and zoom."*) and has two tabs, **"View Trajectories"** (default) and **"Analyze"**, plus a **notebook launcher** sitting in the same row after an "or" separator. While the production run is still going, a banner reads **"Simulation is still running (20%)"** with *"Trajectories and analyses will change as more results are calculated."*
+The Analysis card works with a running or finished simulation. It opens with *"Each model is a snapshot of your molecule during the simulation. Step through them to see how the structure moved over time, or drag inside the viewer to rotate and zoom."* and has two tabs, **"View Trajectories"** (default) and **"Analyze"**, plus a **notebook launcher** sitting in the same row after an "or" separator. While the production run is still going, a banner reads **"Simulation is still running (20%)"** with *"Trajectories and analyses will change as more results are calculated."*
 
-Requirements: the selected simulation must be valid and point to an existing trajectory file and reference structure. The step unlocks once the production run is RUNNING or FINISHED, so partial trajectories can be inspected early. When the manifest is unusable, placeholders explain why: "The selected simulation is invalid. Repair it in the setup step." or "Missing required files: reference_structure, trajectory."
+Requirements: the selected simulation must be valid and point to an existing trajectory file and reference structure. The card opens once the run has saved its first frames, or once it finished or was stopped, so partial trajectories can be inspected early. The 3D viewer loads once the card scrolls near view. When the manifest is unusable, placeholders explain why: "The selected simulation is invalid. Repair it in the setup step." or "Missing required files: reference_structure, trajectory."
 
 ## Notebook launcher
 

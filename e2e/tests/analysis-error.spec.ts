@@ -5,7 +5,6 @@ import { expect, test } from "@playwright/test"
 test("pockets analysis ends in a durable error state", async ({ page }) => {
   await page.goto("experiments/ddddd")
   await page.getByRole("tab", { name: "villin_equilibration", exact: true }).click()
-  await page.getByRole("button", { name: /Go to section 4: Analyze/ }).click()
 
   await page.getByRole("tab", { name: "Analyze" }).click()
   await page.getByRole("combobox", { name: "Analysis" }).click()

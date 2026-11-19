@@ -147,7 +147,7 @@ function renderTune(props: Partial<React.ComponentProps<typeof TuneStep>> = {}) 
   const spies = {
     onTrialIdChange: props.onTrialIdChange ?? vi.fn(),
     onModeChange: props.onModeChange ?? vi.fn(),
-    onStepChange: props.onStepChange ?? vi.fn(),
+    onRunStarted: props.onRunStarted ?? vi.fn(),
   }
   render(
     <QueryClientProvider client={client}>
@@ -339,7 +339,7 @@ describe("TuneStep running job", () => {
     expect(calls.some((call) => call.method === "POST" && call.url.endsWith(`${TUNER_ONE}/stop`))).toBe(true)
   })
 
-  it("enables Run Simulation once a trial is picked, submits the job, then navigates", async () => {
+  it("enables Run Simulation once a trial is picked, submits the job, then reports the start", async () => {
     const { calls } = mockTuner(job)
     const spies = renderTune({ trialId: "t2" })
 
@@ -353,10 +353,10 @@ describe("TuneStep running job", () => {
       pme: "cpu",
       nb: "cpu",
     })
-    expect(spies.onStepChange).toHaveBeenCalledWith(2)
+    expect(spies.onRunStarted).toHaveBeenCalledTimes(1)
   })
 
-  it("navigates to the existing run when submit conflicts with one already there", async () => {
+  it("reports the existing run when submit conflicts with one already there", async () => {
     mockTuner(job, { submitConflicts: true })
     const spies = renderTune({ trialId: "t2" })
 
@@ -364,7 +364,7 @@ describe("TuneStep running job", () => {
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
 
-    await waitFor(() => expect(spies.onStepChange).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(spies.onRunStarted).toHaveBeenCalledTimes(1))
   })
 
   it("confirms before a new run replaces a terminal previous run", async () => {
@@ -382,10 +382,10 @@ describe("TuneStep running job", () => {
     await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /start new run/i }))
 
     await waitFor(() => expect(calls.some((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))).toBe(true))
-    expect(spies.onStepChange).toHaveBeenCalledWith(2)
+    expect(spies.onRunStarted).toHaveBeenCalledTimes(1)
   })
 
-  it("stays on Tune when the run submission fails", async () => {
+  it("does not report a start when the run submission fails", async () => {
     const { calls } = mockTuner(job, { submitFails: true })
     const spies = renderTune({ trialId: "t2" })
 
@@ -394,7 +394,7 @@ describe("TuneStep running job", () => {
     await userEvent.click(run)
 
     await waitFor(() => expect(calls.some((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))).toBe(true))
-    expect(spies.onStepChange).not.toHaveBeenCalled()
+    expect(spies.onRunStarted).not.toHaveBeenCalled()
   })
 })
 
@@ -444,15 +444,7 @@ describe("TuneStep finished and error jobs", () => {
   })
 })
 
-describe("TuneStep footer and manual tab", () => {
-  it("goes back to Setup", async () => {
-    mockTuner(null)
-    const spies = renderTune()
-
-    await userEvent.click(await screen.findByRole("button", { name: /back/i }))
-    expect(spies.onStepChange).toHaveBeenCalledWith(0)
-  })
-
+describe("TuneStep manual tab", () => {
   it("renders the manual form and reports tab switches", async () => {
     mockTuner(null)
     const spies = renderTune()
@@ -485,7 +477,7 @@ describe("TuneStep footer and manual tab", () => {
       pme: "gpu",
       nb: "gpu",
     })
-    expect(spies.onStepChange).toHaveBeenCalledWith(2)
+    expect(spies.onRunStarted).toHaveBeenCalledTimes(1)
   })
 })
 

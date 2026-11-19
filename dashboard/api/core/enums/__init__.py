@@ -10,6 +10,7 @@ from core.enums.population_phase import PopulationPhase
 from core.enums.population_status import PopulationStatus
 from core.enums.preprocessing_mode import PreprocessingMode
 from core.enums.source_type import SourceType
+from core.enums.step import Step
 
 __all__ = [
     "AmberBinary",
@@ -24,4 +25,5 @@ __all__ = [
     "PopulationStatus",
     "PreprocessingMode",
     "SourceType",
+    "Step",
 ]

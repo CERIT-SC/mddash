@@ -1,4 +1,4 @@
-import type { AmberJob, GromacsJob, TunerJob, TunerTrial } from "@/api/generated/models"
+import { Step, type AmberJob, type GromacsJob, type TunerJob, type TunerTrial } from "@/api/generated/models"
 import type { FetchCall } from "@/shared/fixtures/mock-fetch"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -173,19 +173,16 @@ function mockRun(options: MockRunOptions = {}) {
 
 function renderRun(props: Partial<React.ComponentProps<typeof RunStep>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const spies = { onStepChange: props.onStepChange ?? vi.fn() }
   render(
     <QueryClientProvider client={client}>
       <RunStep
         experimentId="exp1"
         engine="GMX"
         simulation={simulation(SIM, { valid: true, missing_files: [] })}
-        {...spies}
         {...props}
       />
     </QueryClientProvider>
   )
-  return spies
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -204,7 +201,6 @@ describe("RunStep pending job", () => {
     })
     renderRun()
 
-    expect(await screen.findByText("Run your simulation")).toBeInTheDocument()
     expect(await screen.findByText("Preparing")).toBeInTheDocument()
     expect(screen.getByRole("progressbar")).toBeInTheDocument()
     expect(screen.queryByText(/steps$/)).not.toBeInTheDocument()
@@ -217,7 +213,6 @@ describe("RunStep pending job", () => {
     expect(screen.getAllByText("CPU")).not.toHaveLength(0)
     expect(screen.getAllByText("—")).toHaveLength(3)
     expect(screen.getByRole("button", { name: /stop run/i })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
   })
 })
 
@@ -239,40 +234,6 @@ describe("RunStep running job", () => {
     await screen.findByText("20%")
     state.job = gmxJob({ nsteps_done: 5000, estimated_time: 80 })
     expect(await screen.findByText("50%")).toBeInTheDocument()
-  })
-
-  it("enables Analyze mid-run (partial trajectories are analyzable)", async () => {
-    mockRun()
-    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
-
-    await screen.findByText("20%")
-    const button = screen.getByRole("button", { name: /analyze/i })
-    expect(button).toBeEnabled()
-
-    await userEvent.click(button)
-    expect(spies.onStepChange).toHaveBeenCalledWith(3)
-  })
-
-  it("keeps Analyze disabled while the ladder holds the run at step 2, even with progress parsed", async () => {
-    // The button follows the same ladder value the stepper consumes. No
-    // second client-side copy of the unlock rule from a different query.
-    mockRun({ initial: gmxJob({ nsteps_done: 5000 }) })
-    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 2 }) })
-
-    expect(await screen.findByText("50%")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
-  })
-
-  it("enables Analyze once the ladder reaches step 3, even before the job payload carries progress", async () => {
-    mockRun({ initial: gmxJob({ nsteps: null, nsteps_done: null, estimated_time: null }) })
-    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
-
-    expect(await screen.findByText("Preparing")).toBeInTheDocument()
-    const button = screen.getByRole("button", { name: /analyze/i })
-    expect(button).toBeEnabled()
-
-    await userEvent.click(button)
-    expect(spies.onStepChange).toHaveBeenCalledWith(3)
   })
 
   it("shows estimates and badges from the tuner trial matching the job config", async () => {
@@ -299,11 +260,11 @@ describe("RunStep running job", () => {
 })
 
 describe("RunStep finished job", () => {
-  it("shows Finished, enables Analyze, and hides the stop button", async () => {
+  it("shows Finished and hides the stop button", async () => {
     mockRun({
       initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, estimated_time: 0, performance: 62.5 }),
     })
-    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
+    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: Step.analysis }) })
 
     const progress = await screen.findByRole("region", { name: /run progress/i })
     expect(await within(progress).findByText("Finished")).toBeInTheDocument()
@@ -312,14 +273,11 @@ describe("RunStep finished job", () => {
     expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /extend/i })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /stop run/i })).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: /analyze/i }))
-    expect(spies.onStepChange).toHaveBeenCalledWith(3)
   })
 
   it("re-runs with the job's config after confirmation", async () => {
     const { calls } = mockRun({ initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000 }) })
-    const spies = renderRun()
+    renderRun()
 
     await userEvent.click(await screen.findByRole("button", { name: /re-run/i }))
     const dialog = await screen.findByRole("alertdialog")
@@ -331,7 +289,6 @@ describe("RunStep finished job", () => {
       expect(post?.body).toEqual({ np: 1, ntomp: 1, pme: "cpu", nb: "cpu" })
     })
     expect(calls.some((call) => call.method === "DELETE")).toBe(false)
-    expect(spies.onStepChange).not.toHaveBeenCalled()
   })
 })
 
@@ -341,21 +298,20 @@ describe("RunStep error job", () => {
       initial: gmxJob({ status: "ERROR", is_live: false }),
       logs: { stderr: "simulation exploded\n" },
     })
-    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 2 }) })
+    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: Step.simulation }) })
 
     expect(await screen.findByText("Failed")).toBeInTheDocument()
     expect(await screen.findByText("simulation exploded")).toBeInTheDocument()
     expect(calls.some((call) => call.url.includes("type=stderr"))).toBe(true)
-    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
   })
 })
 
 describe("RunStep stop flow", () => {
-  it("stops the job without deleting it, data stays analyzable and extendable", async () => {
+  it("stops the job without deleting it and keeps it extendable", async () => {
     const { calls } = mockRun()
     // The mock has parsed progress, so the ladder is already at step 3; STOPPED
     // stays analyzable, so the refetch after invalidate() delivers step 3 back.
-    const spies = renderRun({ pollMs: 25, simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
+    renderRun({ pollMs: 25, simulation: simulation(SIM, { valid: true, missing_files: [], step: Step.analysis }) })
 
     await userEvent.click(await screen.findByRole("button", { name: /stop run/i }))
     const dialog = await screen.findByRole("alertdialog")
@@ -368,12 +324,10 @@ describe("RunStep stop flow", () => {
       expect(calls.some((call) => call.method === "POST" && call.url.endsWith(`${GMX_ONE}/stop`))).toBe(true)
     })
     expect(calls.some((call) => call.method === "DELETE")).toBe(false)
-    expect(spies.onStepChange).not.toHaveBeenCalled()
 
-    // The stopped run stays visible, analyzable, and extendable.
+    // The stopped run stays visible and extendable; the ladder keeps its data analyzable.
     const progress = await screen.findByRole("region", { name: /run progress/i })
     expect(await within(progress).findByText("Stopped")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /analyze/i })).toBeEnabled()
     expect(screen.getByRole("button", { name: /extend/i })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /stop run/i })).not.toBeInTheDocument()
@@ -442,11 +396,11 @@ describe("RunStep extend flow", () => {
 })
 
 describe("RunStep without a job", () => {
-  it("navigates to Tune", async () => {
+  it("says no run is in progress", async () => {
     mockRun({ initial: null })
-    const spies = renderRun()
+    renderRun()
 
-    await waitFor(() => expect(spies.onStepChange).toHaveBeenCalledWith(1))
+    expect(await screen.findByText("No run in progress.")).toBeInTheDocument()
   })
 })
 

@@ -20,14 +20,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Button,
   buttonVariants,
-  H4,
-  Separator,
   Skeleton,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, ArrowRight, RotateCcw, Square } from "lucide-react"
+import { RotateCcw, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { ConfigUsed } from "./config-used"
@@ -42,13 +39,12 @@ type RunStepProps = {
   experimentId: string
   engine: Engine
   simulation: Simulation
-  onStepChange: (step: number) => void
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
-/** Run wizard step: watch, stop, extend, or re-run the production simulation. */
-export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs = RUN_POLL_MS }: RunStepProps) {
+/** Simulation step: watch, stop, extend, or re-run the production simulation. */
+export function RunStep({ experimentId, engine, simulation, pollMs = RUN_POLL_MS }: RunStepProps) {
   const queryClient = useQueryClient()
   const [confirmStop, setConfirmStop] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
@@ -58,9 +54,6 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const job = jobQuery.job
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
-  // The ladder in props is the single source. The stepper consumes the same value;
-  // the server holds it at Run until progress parses (STOPPED counts as step 3 too).
-  const analyzable = simulation.step >= 3
   // A terminal GMX run can be resumed from its checkpoint (AMBER has no extension yet).
   const canExtend = engine !== Engine.AMBER && job !== undefined && !job.is_live
 
@@ -132,22 +125,19 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
     )
   }
 
-  // A gone job (deleted here or elsewhere) means this step has nothing to show.
-  // The run lifecycle restarts from Tune, so send the user there.
+  // A gone job (deleted here or elsewhere) leaves nothing to show. Refetching the
+  // ladder moves the cards back to Configuration, where the run lifecycle restarts.
   const missing = jobQuery.missing
   useEffect(() => {
-    if (missing) onStepChange(1)
-  }, [missing, onStepChange])
+    if (missing) void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
+  }, [missing, queryClient, experimentId])
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <H4>Run your simulation</H4>
-        <p className="text-text-muted text-sm">
-          This step runs your full simulation with the configuration below. It can take a while — you'll be able to
-          leave the page and come back to check progress.
-        </p>
-      </div>
+      <p className="text-text-muted text-sm">
+        This step runs your full simulation with the configuration below. It can take a while — you'll be able to leave
+        the page and come back to check progress.
+      </p>
 
       {job === undefined && jobQuery.pending ? (
         <div className="space-y-4" aria-label="Loading simulation job">
@@ -157,7 +147,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       ) : jobQuery.error !== undefined ? (
         <ApiErrorAlert error={jobQuery.error} onRetry={jobQuery.retry} />
       ) : job === undefined ? (
-        <p className="text-text-muted text-sm">No run in progress — taking you back to tuning…</p>
+        <p className="text-text-muted text-sm">No run in progress.</p>
       ) : (
         <div className="space-y-6">
           <ConfigUsed engine={engine} job={job} trials={trials} />
@@ -184,24 +174,6 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
           )}
         </div>
       )}
-
-      <Separator />
-
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" onClick={() => onStepChange(1)}>
-          <ArrowLeft aria-hidden />
-          Back
-        </Button>
-        <Button
-          type="button"
-          disabled={!analyzable}
-          title={analyzable ? undefined : "Available once the run reports progress"}
-          onClick={() => onStepChange(3)}
-        >
-          Analyze
-          <ArrowRight aria-hidden />
-        </Button>
-      </div>
 
       {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           until https://github.com/CERIT-SC/design-system/pull/108 lands. */}

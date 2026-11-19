@@ -79,7 +79,7 @@ export const listExperimentsResponseSourceOneFileCountMin = 0;
 
 
 
-export const listExperimentsResponseStepDefault = 0;
+export const listExperimentsResponseStepDefault = `setup`;
 export const listExperimentsResponseStatusDefault = `setup`;
 export const listExperimentsResponseCanPublishDefault = false;
 
@@ -184,7 +184,7 @@ export const ListExperimentsResponseItem = zod.object({
   "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
   "topology_file": zod.union([zod.string(),zod.null()]).optional()
 }).describe('On-demand mwf analysis job (input file paths pass through).')),
-  "step": zod.int().default(listExperimentsResponseStepDefault),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).default(listExperimentsResponseStepDefault).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string().default(listExperimentsResponseStatusDefault),
   "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
   "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
@@ -223,7 +223,7 @@ export const createExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-export const createExperimentResponseStepDefault = 0;
+export const createExperimentResponseStepDefault = `setup`;
 export const createExperimentResponseStatusDefault = `setup`;
 export const createExperimentResponseCanPublishDefault = false;
 
@@ -328,7 +328,7 @@ export const CreateExperimentResponse = zod.object({
   "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
   "topology_file": zod.union([zod.string(),zod.null()]).optional()
 }).describe('On-demand mwf analysis job (input file paths pass through).')),
-  "step": zod.int().default(createExperimentResponseStepDefault),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).default(createExperimentResponseStepDefault).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string().default(createExperimentResponseStatusDefault),
   "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
   "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
@@ -354,7 +354,7 @@ export const getExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-export const getExperimentResponseStepDefault = 0;
+export const getExperimentResponseStepDefault = `setup`;
 export const getExperimentResponseStatusDefault = `setup`;
 export const getExperimentResponseCanPublishDefault = false;
 
@@ -459,7 +459,7 @@ export const GetExperimentResponse = zod.object({
   "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
   "topology_file": zod.union([zod.string(),zod.null()]).optional()
 }).describe('On-demand mwf analysis job (input file paths pass through).')),
-  "step": zod.int().default(getExperimentResponseStepDefault),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).default(getExperimentResponseStepDefault).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string().default(getExperimentResponseStatusDefault),
   "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
   "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
@@ -489,7 +489,7 @@ export const updateExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-export const updateExperimentResponseStepDefault = 0;
+export const updateExperimentResponseStepDefault = `setup`;
 export const updateExperimentResponseStatusDefault = `setup`;
 export const updateExperimentResponseCanPublishDefault = false;
 
@@ -594,7 +594,7 @@ export const UpdateExperimentResponse = zod.object({
   "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
   "topology_file": zod.union([zod.string(),zod.null()]).optional()
 }).describe('On-demand mwf analysis job (input file paths pass through).')),
-  "step": zod.int().default(updateExperimentResponseStepDefault),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).default(updateExperimentResponseStepDefault).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string().default(updateExperimentResponseStatusDefault),
   "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
   "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
@@ -634,7 +634,7 @@ export const cancelExperimentPopulationResponseSourceOneFileCountMin = 0;
 
 
 
-export const cancelExperimentPopulationResponseStepDefault = 0;
+export const cancelExperimentPopulationResponseStepDefault = `setup`;
 export const cancelExperimentPopulationResponseStatusDefault = `setup`;
 export const cancelExperimentPopulationResponseCanPublishDefault = false;
 
@@ -739,7 +739,7 @@ export const CancelExperimentPopulationResponse = zod.object({
   "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
   "topology_file": zod.union([zod.string(),zod.null()]).optional()
 }).describe('On-demand mwf analysis job (input file paths pass through).')),
-  "step": zod.int().default(cancelExperimentPopulationResponseStepDefault),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).default(cancelExperimentPopulationResponseStepDefault).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string().default(cancelExperimentPopulationResponseStatusDefault),
   "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
   "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
@@ -1008,9 +1008,6 @@ export const ListSimulationsParams = zod.object({
 
 
 
-export const listSimulationsResponseStepMin = 0;
-export const listSimulationsResponseStepMax = 3;
-
 
 
 export const ListSimulationsResponseItem = zod.object({
@@ -1024,7 +1021,7 @@ export const ListSimulationsResponseItem = zod.object({
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
   "missing_files": zod.array(zod.string()),
-  "step": zod.int().min(listSimulationsResponseStepMin).max(listSimulationsResponseStepMax),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
@@ -1057,9 +1054,6 @@ export const CreateSimulationBody = zod.object({
 
 
 
-export const createSimulationResponseStepMin = 0;
-export const createSimulationResponseStepMax = 3;
-
 
 
 export const CreateSimulationResponse = zod.object({
@@ -1073,7 +1067,7 @@ export const CreateSimulationResponse = zod.object({
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
   "missing_files": zod.array(zod.string()),
-  "step": zod.int().min(createSimulationResponseStepMin).max(createSimulationResponseStepMax),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
@@ -1095,9 +1089,6 @@ export const GetSimulationParams = zod.object({
 
 
 
-export const getSimulationResponseStepMin = 0;
-export const getSimulationResponseStepMax = 3;
-
 
 
 export const GetSimulationResponse = zod.object({
@@ -1111,7 +1102,7 @@ export const GetSimulationResponse = zod.object({
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
   "missing_files": zod.array(zod.string()),
-  "step": zod.int().min(getSimulationResponseStepMin).max(getSimulationResponseStepMax),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
@@ -1145,9 +1136,6 @@ export const UpdateSimulationBody = zod.object({
 
 
 
-export const updateSimulationResponseStepMin = 0;
-export const updateSimulationResponseStepMax = 3;
-
 
 
 export const UpdateSimulationResponse = zod.object({
@@ -1161,7 +1149,7 @@ export const UpdateSimulationResponse = zod.object({
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
   "missing_files": zod.array(zod.string()),
-  "step": zod.int().min(updateSimulationResponseStepMin).max(updateSimulationResponseStepMax),
+  "step": zod.enum(['setup', 'configuration', 'simulation', 'analysis']).describe('Wizard steps of a simulation; declaration order is display order, which clients derive counts from.'),
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()

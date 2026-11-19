@@ -13,6 +13,7 @@ import type { Notebook } from './notebook.ts';
 import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
 import type { Population } from './population.ts';
 import type { SimulationJob } from './simulationJob.ts';
+import type { Step } from './step.ts';
 import type { TunerJob } from './tunerJob.ts';
 
 /**
@@ -37,7 +38,7 @@ export interface Experiment {
   tuner_jobs: TunerJob[];
   simulation_jobs: SimulationJob[];
   analysis_jobs: AnalysisJob[];
-  step?: number;
+  step?: Step;
   status?: string;
   archived_at: string | null;
   archive_state: ExperimentArchiveState;

@@ -9,22 +9,18 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  H4,
-  Separator,
   Skeleton,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from "@e-infra/design-system"
-import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react"
+import { RotateCcw } from "lucide-react"
 
 import { AnalysisPanel } from "./analysis-panel"
 import { analysisUnavailableReason } from "./analysis-unavailable"
 import { resolveCoordsFormat, resolveStructureFormat } from "./mol-star-formats"
+import { useNearViewport } from "./use-near-viewport"
 
 // Lazy so molstar's bundle only loads when this step (and tab) actually opens.
 const MolStar = lazy(() => import("./mol-star"))
@@ -43,14 +39,11 @@ type AnalyzeStepProps = {
   /** URL-owned tab view. */
   tab: "trajectory" | "analysis"
   onTabChange: (tab: "trajectory" | "analysis") => void
-  onStepChange: (step: number) => void
-  /** Why Publish is still locked (tooltip on the disabled button); undefined when unlocked. */
-  publishReason: string | undefined
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
-/** Analyze wizard step: trajectory viewer first, then submitted-analysis graphs. */
+/** Analysis step: trajectory viewer first, then submitted-analysis graphs. */
 export function AnalyzeStep({
   experimentId,
   engine,
@@ -59,8 +52,6 @@ export function AnalyzeStep({
   onSelectedAnalysisChange,
   tab,
   onTabChange,
-  onStepChange,
-  publishReason,
   pollMs = SIMULATION_POLL_MS,
 }: AnalyzeStepProps) {
   const [reloadKey, setReloadKey] = useState(0)
@@ -80,6 +71,8 @@ export function AnalyzeStep({
   const openHref = notebook === undefined ? undefined : notebookRoleUrl("analysis", notebookFiles, notebook)
 
   const viewerUnavailableReason = analysisUnavailableReason(simulation)
+  // Mol* is heavy (bundle + WebGL); a card further down the page waits until it scrolls near.
+  const [viewerSlot, viewerNear] = useNearViewport<HTMLDivElement>()
   const trajectoryPath = simulation.resolved_files.trajectory ?? null
   const structurePath = simulation.resolved_files.reference_structure ?? null
 
@@ -111,13 +104,10 @@ export function AnalyzeStep({
         </InfoBanner>
       )}
 
-      <div className="space-y-1">
-        <H4>Analyze the results</H4>
-        <p className="text-text-muted text-sm">
-          Each model is a snapshot of your molecule during the simulation. Step through them to see how the structure
-          moved over time, or drag inside the viewer to rotate and zoom.
-        </p>
-      </div>
+      <p className="text-text-muted text-sm">
+        Each model is a snapshot of your molecule during the simulation. Step through them to see how the structure
+        moved over time, or drag inside the viewer to rotate and zoom.
+      </p>
 
       <Tabs value={tab} onValueChange={(next) => onTabChange(next as "trajectory" | "analysis")}>
         <div className="flex flex-wrap items-center gap-3">
@@ -158,31 +148,16 @@ export function AnalyzeStep({
               {viewerUnavailableReason ?? "Select a simulation above to view its structure."}
             </div>
           ) : (
-            <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>{viewer}</Suspense>
+            <div ref={viewerSlot}>
+              {viewerNear ? (
+                <Suspense fallback={<Skeleton className="h-[600px] w-full" />}>{viewer}</Suspense>
+              ) : (
+                <Skeleton className="h-[600px] w-full" />
+              )}
+            </div>
           )}
         </TabsContent>
       </Tabs>
-
-      <Separator />
-
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" variant="outline" onClick={() => onStepChange(2)}>
-          <ArrowLeft aria-hidden />
-          Back
-        </Button>
-        {/* The span wrapper lets the tooltip fire while the button is disabled. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="inline-flex">
-              <Button type="button" disabled={publishReason !== undefined} onClick={() => onStepChange(4)}>
-                Publish
-                <ArrowRight aria-hidden />
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {publishReason !== undefined && <TooltipContent>{publishReason}</TooltipContent>}
-        </Tooltip>
-      </div>
     </div>
   )
 }

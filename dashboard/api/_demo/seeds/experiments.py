@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from core.enums import DeviceType, Engine, PodStatus, SourceType
+from core.enums import DeviceType, Engine, PodStatus, SourceType, Step
 from modules.models import Experiment, Notebook
 
 from ..files import MDPOSIT_DEMO_PROJECT_URL
@@ -169,7 +169,7 @@ def seed_experiments(now: datetime) -> tuple[dict[str, Experiment], list[Noteboo
         updated_at=now - timedelta(days=12),
         archived_at=now - timedelta(days=12),
         archived_size_bytes=8 * 1024**3,
-        archived_step=4,
+        archived_step=Step.ANALYSIS,
         archived_status="published",
         mdrepo_id="demo-archived-record",
         mdrepo_published=True,

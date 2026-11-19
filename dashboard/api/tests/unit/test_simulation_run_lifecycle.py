@@ -12,7 +12,7 @@ import pytest
 from clients import Clients
 from clients.mdrun import MDRunClient
 from core import db as db_module
-from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
+from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus, Step
 from httpx import AsyncClient
 from modules.jobs.amber.models import AmberJob
 from modules.jobs.gmx.models import GromacsJob
@@ -831,7 +831,7 @@ class TestRunRow:
         await _add_gmx_job(db_session, experiment_id, sim_path, "run-stopped", JobStatus.STOPPED)
 
         sim = await _sim(db_session, clients, experiment_id, sim_path)
-        assert sim.step == 3
+        assert sim.step == Step.ANALYSIS
         assert sim.status == "analyzing"
         assert not sim.live
 
@@ -848,7 +848,7 @@ class TestRunRow:
         await _add_gmx_job(db_session, experiment_id, sim_path, "run-running", JobStatus.RUNNING)
 
         sim = await _sim(db_session, clients, experiment_id, sim_path)
-        assert (sim.step, sim.status) == (2, "simulating")
+        assert (sim.step, sim.status) == (Step.SIMULATION, "simulating")
         assert sim.live
 
 

@@ -96,6 +96,7 @@ export * from './startNotebookRequestTier.ts';
 export * from './statisticalData.ts';
 export * from './statisticalSeriesResult.ts';
 export * from './statisticalSeriesResultY.ts';
+export * from './step.ts';
 export * from './thicknessResult.ts';
 export * from './thicknessResultData.ts';
 export * from './tunerJob.ts';

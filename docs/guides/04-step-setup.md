@@ -1,10 +1,10 @@
 # Step 1 Setup
 
-The Setup step (step 0) is where input data becomes a runnable simulation definition. Goal: end up with at least one valid **simulation manifest** (`.simulation.json`). The setup notebook produces it, or users create it manually in the editor.
+The Setup card (step 1) is where input data becomes a runnable simulation definition. Goal: end up with at least one valid **simulation manifest** (`.simulation.json`). The setup notebook produces it, or users create it manually in the editor.
 
 ## Page layout
 
-- A **"Set up your simulation"** heading with the subtitle: *"Run the setup notebook to generate a simulation manifest, or create one manually. At least one valid setup is required to continue."*
+- The card opens with the subtitle: *"Run the setup notebook to generate a simulation manifest, or create one manually. At least one valid setup is required to continue."*
 - **Setup source tabs.** **"From Notebook"** (default) and **"Manual"**; the URL keeps the choice (`?source=manual`).
 - The **simulation form** card ("New simulation" when creating, "Simulation" when editing). It is available on both tabs once a simulation is selected or being created.
 - While a notebook is running, a **notebook status bar** appears under the site header (on every experiment page) with **"Open notebook"** / **"Stop notebook"** controls.
@@ -15,7 +15,7 @@ The **"From Notebook"** tab shows a **"Step by step"** guide box whose three num
 
 1. **"Start the notebook".** Pick a **Size** from the offered tiers (each option shows its resources, e.g. `5 cores / 8 GB`), optionally tick the **GPU** checkbox, then click **"Start notebook"**. The notebook status bar then tracks the states: **"Starting…"**, then **"Initializing…"** (the environment is being prepared; after repeated probe failures it reads "Taking longer than expected"), then a live **uptime** readout once ready. GPU notebooks run the CUDA GROMACS build. `gmx mdrun` uses the GPU automatically. Do not set `OMP_NUM_THREADS` there. If you do, pass `-ntmpi 1` to `mdrun`.
 2. **"▶ Run Pipeline" in the notebook.** Click **"Open notebook"**; JupyterLab opens in a new tab with the **setup.ipynb** notebook already loaded (a deep link into the experiment directory). Run the pipeline cells. The pipeline fetches or builds the system (from the PDB, repository, or uploaded data), prepares engine input files, and writes a `*.simulation.json` manifest into the experiment directory. **"Stop notebook"** stays available the whole time (disabled only while a stop is in flight or status is unknown).
-3. **"Go to Tune".** The wizard detects the new manifest automatically. It announces `Simulation "<name>" created by the pipeline`, adopts it as the selected tab, and unlocks the Tune step within about 5 seconds.
+3. **"Continue to Configuration".** The wizard detects the new manifest automatically. It announces `Simulation "<name>" created by the pipeline`, adopts it as the selected tab, and opens the Configuration card within about 5 seconds. Setup then folds to a one-line summary; **Show** unfolds it.
 
 Completed guide steps get a green check and strikethrough titles.
 

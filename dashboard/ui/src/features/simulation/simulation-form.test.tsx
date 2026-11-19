@@ -1,5 +1,5 @@
 import { getListSimulationsQueryKey, type ListSimulationsQueryResult } from "@/api/generated/client"
-import { Engine } from "@/api/generated/models"
+import { Engine, Step } from "@/api/generated/models"
 import type { FileInfo, Simulation } from "@/api/generated/models"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -159,7 +159,7 @@ describe("SimulationForm (existing manifest)", () => {
     name: "protein",
     valid: true,
     locked: true,
-    step: 1,
+    step: Step.configuration,
     files: {
       run_input: "production/protein.tpr",
       reference_structure: "analysis/protein-reference.gro",

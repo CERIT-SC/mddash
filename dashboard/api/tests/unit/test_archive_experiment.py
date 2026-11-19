@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from clients import Clients
-from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus
+from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, Step
 from core.errors import ApiError, Conflict
 from modules.archive.service import ArchiveService
 from modules.archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
@@ -192,7 +192,7 @@ class TestRestoreGates:
 
 class TestArchiveStateReconciliation:
     def _snap(self, experiment: Experiment) -> None:
-        experiment.archived_step = 2
+        experiment.archived_step = Step.SIMULATION
         experiment.archived_status = "running"
         experiment.archived_size_bytes = 1234
 
@@ -502,7 +502,7 @@ class TestArchivedSerialization:
         service: ExperimentService,
     ) -> None:
         experiment.archived_at = datetime.now(UTC)
-        experiment.archived_step = 4
+        experiment.archived_step = Step.ANALYSIS
         experiment.archived_status = "published"
         experiment.archived_size_bytes = 9000
         experiment = await _reload(db_session)
@@ -513,7 +513,7 @@ class TestArchivedSerialization:
 
         assert data["archive_state"] == "archived"
         assert data["archived_at"] is not None
-        assert data["step"] == 4
+        assert data["step"] == "analysis"
         assert data["status"] == "published"
         assert data["size_bytes"] == 9000
         assert "archived_step" not in data
@@ -533,7 +533,7 @@ class TestFrozenGates:
         self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
     ) -> None:
         """A publish racing the archiving window would read files the worker is about to delete."""
-        experiment.archived_step = 3
+        experiment.archived_step = Step.ANALYSIS
         experiment.archived_status = "ready"
         with _job_active(True), pytest.raises(Conflict):
             await service.publishing.publish_mdposit(experiment, "x")

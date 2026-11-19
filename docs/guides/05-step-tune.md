@@ -1,15 +1,15 @@
-# Step 2 Tune
+# Step 2 Configuration
 
-The Tune step benchmarks execution configurations of the simulation and reports measured performance, estimated runtime, and estimated cost. The production run then uses the fastest or cheapest configuration instead of guesswork. It is also the only place a production run can start: the Run step is a monitoring view that receives the submitted run.
+The Configuration card benchmarks execution configurations of the simulation and reports measured performance, estimated runtime, and estimated cost. The production run then uses the fastest or cheapest configuration instead of guesswork. It is also the only place a production run can start: the Simulation card is a monitoring view that receives the submitted run.
 
 ## Layout
 
-The step is titled **"Tune your simulation"** (*"Tuning runs your simulation briefly across different hardware settings to find the fastest one."*) and offers two configuration-method tabs (kept in the URL as `?mode=manual`):
+The card opens with *"Tuning runs your simulation briefly across different hardware settings to find the fastest one."* and offers two configuration-method tabs (kept in the URL as `?mode=manual`):
 
 - **"Tuning".** The guided benchmark flow (default).
 - **"Manual configuration".** Submit a run directly with hand-picked parameters, no benchmarks.
 
-The footer always offers **"Back"** (to Setup) and **"Run Simulation"** (start the production run; enabled once a configuration is picked or filled in).
+Below the forms, **"Run Simulation"** starts the production run (enabled once a configuration is picked or filled in).
 
 ## Starting a tuning job
 
@@ -52,7 +52,7 @@ Finished trials with measurements can earn:
 
 1. Select a trial's radio button. A **"Customize selected configuration"** collapsible appears under the table, pre-filled with the trial's settings (GROMACS: PME, NB, MPI processes, threads; AMBER: Binary, Ewald preset, MPI processes, threads). Values stay editable.
 2. On the **"Manual configuration"** tab the same hardware form is offered directly (no trial needed): GROMACS has "PME (Particle Mesh Ewald)" and "NB (Non-bonded interactions)" (CPU/GPU selects); AMBER has "Binary" (`pmemd.cuda (GPU)` / `pmemd.MPI (CPU)`) and "Ewald preset" (Default / Optimized); both have "MPI Processes (MPI ranks)" and "Threads" number inputs.
-3. Click **"Run Simulation"**. The production job starts ("Run started" toast) and the wizard advances to the **Run** step. On failure you stay on Tune with an error toast.
+3. Click **"Run Simulation"**. The production job starts ("Run started" toast) and the page scrolls to the **Simulation** card. On failure you stay in Configuration with an error toast.
 
 The picked trial is remembered in the URL (`?trial=`) and survives tab switches.
 

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Optional
 import sqlalchemy as sa
 from core.config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from core.db import Base
-from core.enums import Engine, JobStatus, SourceType
+from core.enums import Engine, JobStatus, SourceType, Step
 from core.utils import file_download_url, get_du_size
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -65,7 +65,7 @@ class Experiment(Base):
     # snapshot card state at archive-submit time and double as "archive submitted" markers.
     archived_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
     archived_size_bytes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
-    archived_step: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    archived_step: Mapped[Step | None] = mapped_column(sa.Enum(Step), nullable=True)
     archived_status: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
 
     # Child rows load with the experiment (async sessions cannot lazy-load on attribute access).
@@ -94,7 +94,7 @@ class Experiment(Base):
     # Transient per-request state filled by ArchiveService.refresh_state() / memoized derivations
     _archive_state: str | None = None
     _archive_state_refreshed: bool = False
-    _memo_step: tuple[int, str] | None = None
+    _memo_step: tuple[Step, str] | None = None
     _memo_latest: "Simulation | None" = None
     _memo_latest_scanned: bool = False
 
@@ -133,7 +133,7 @@ class Experiment(Base):
         return result
 
     @property
-    def step(self) -> int:
+    def step(self) -> Step:
         """Step of the experiment based on its current state."""
         return self._step_status()[0]
 
@@ -188,32 +188,32 @@ class Experiment(Base):
             self._memo_latest_scanned = True
         return self._memo_latest
 
-    def _step_status(self) -> tuple[int, str]:
+    def _step_status(self) -> tuple[Step, str]:
         """
         Publish state overrides; otherwise inherit the latest simulation's (step, status).
 
         Returns:
-            (step, status): step is the phase index (0-4, with publish 4).
+            (step, status): publishing and published keep the analysis step and report in status.
         """
         if self._memo_step is None:
             self._memo_step = self._compute_step_status()
         return self._memo_step
 
-    def _compute_step_status(self) -> tuple[int, str]:
+    def _compute_step_status(self) -> tuple[Step, str]:
         if self.archived_at is not None and self.archived_step is not None:
             # Files are gone; serve the snapshot taken at archive-submit time.
             return self.archived_step, self.archived_status or "archived"
 
         if self.mdrepo_published is True:
-            return 4, "published"
+            return Step.ANALYSIS, "published"
 
         if self.mdrepo_published is False:
-            return 4, "publishing"
+            return Step.ANALYSIS, "publishing"
 
         if latest := self._latest_simulation():
             return latest.step_status
 
-        return 0, "setup"
+        return Step.SETUP, "setup"
 
     # --- archiving ----------------------------------------------------------------
 

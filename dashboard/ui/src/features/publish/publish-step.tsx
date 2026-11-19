@@ -26,7 +26,6 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
-  H4,
   Label,
   Link,
   Progress,
@@ -43,39 +42,27 @@ import {
   TooltipTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  ArrowLeft,
-  CloudUpload,
-  Copy,
-  Download,
-  ExternalLink,
-  Folder,
-  HardDrive,
-  LoaderCircle,
-  LogIn,
-  Plus,
-} from "lucide-react"
+import { CloudUpload, Copy, Download, ExternalLink, Folder, HardDrive, LoaderCircle, LogIn, Plus } from "lucide-react"
 import { toast } from "sonner"
 
 import { mdpositUnavailableReason } from "./mdposit-unavailable"
 import { pollWhileUploadActive, uploadActive, uploadFailureReason } from "./upload-state"
 
 const PUBLISH_POLL_MS = 3000
-const BACK_STEP = 3
 const MAX_FAILED_LISTED = 10
 
 type PublishStepProps = {
   experiment: Experiment
   simulation: Simulation
-  onStepChange: (step: number) => void
+  onClose: () => void
   /** Drops the transient MDRepo OAuth params from the URL through the router. */
   onOAuthHandled: () => void
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
-/** Publish wizard step: MDRepo draft upload with background Job progress, or an MDPosit handoff package. */
-export function PublishStep({ experiment, simulation, onStepChange, onOAuthHandled, pollMs }: PublishStepProps) {
+/** Publish flow: MDRepo draft upload with background Job progress, or an MDPosit handoff package. */
+export function PublishStep({ experiment, simulation, onClose, onOAuthHandled, pollMs }: PublishStepProps) {
   const mdpositEnabled = experiment.engine === Engine.GMX
   const [target, setTarget] = useState<PublishRequestTarget>(PublishRequestTarget.invenio)
 
@@ -96,13 +83,6 @@ export function PublishStep({ experiment, simulation, onStepChange, onOAuthHandl
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <H4>Publish your experiment (optional)</H4>
-        <p className="text-text-muted text-sm">
-          Upload the experiment&apos;s data to a public repository to make it citable, or hand it off to MDPosit.
-        </p>
-      </div>
-
       {mdpositEnabled && (
         <div className="max-w-72 space-y-2">
           <Label htmlFor="publish-target">Publication target</Label>
@@ -119,9 +99,9 @@ export function PublishStep({ experiment, simulation, onStepChange, onOAuthHandl
       )}
 
       {target === PublishRequestTarget.mdposit ? (
-        <MdpositPublish experiment={experiment} simulation={simulation} onStepChange={onStepChange} />
+        <MdpositPublish experiment={experiment} simulation={simulation} onClose={onClose} />
       ) : (
-        <InvenioPublish experiment={experiment} onStepChange={onStepChange} pollMs={pollMs ?? PUBLISH_POLL_MS} />
+        <InvenioPublish experiment={experiment} onClose={onClose} pollMs={pollMs ?? PUBLISH_POLL_MS} />
       )}
     </div>
   )
@@ -151,11 +131,11 @@ function PublishStats({ upload }: { upload: PublishStatus }) {
 
 type InvenioPublishProps = {
   experiment: Experiment
-  onStepChange: (step: number) => void
+  onClose: () => void
   pollMs: number
 }
 
-function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProps) {
+function InvenioPublish({ experiment, onClose, pollMs }: InvenioPublishProps) {
   const queryClient = useQueryClient()
   const experimentId = experiment.id
 
@@ -205,7 +185,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         upload={upload}
         uploadError={hasDraft && uploadQuery.isError ? uploadQuery.error : undefined}
         onRetryStats={() => void uploadQuery.refetch()}
-        onBack={() => onStepChange(BACK_STEP)}
+        onClose={onClose}
       />
     )
   }
@@ -214,7 +194,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
     return (
       <>
         <ApiErrorAlert error={mdrepoStatus.error} onRetry={() => void mdrepoStatus.refetch()} />
-        <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
+        <PublishFooter onClose={onClose} />
       </>
     )
   }
@@ -223,7 +203,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
     return (
       <>
         <Skeleton className="h-16 w-full" />
-        <PublishFooter onBack={() => onStepChange(BACK_STEP)} busy />
+        <PublishFooter onClose={onClose} busy />
       </>
     )
   }
@@ -232,7 +212,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
     return (
       <>
         <ApiErrorAlert error={uploadQuery.error} onRetry={() => void uploadQuery.refetch()} />
-        <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
+        <PublishFooter onClose={onClose} />
       </>
     )
   }
@@ -370,7 +350,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
       {upload !== undefined && <PublishStats upload={upload} />}
       <StepGuide title="Step by step" label="Publish steps" steps={steps} />
       <Separator />
-      <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
+      <PublishFooter onClose={onClose} />
     </>
   )
 }
@@ -381,11 +361,11 @@ type PublishedRecordProps = {
   /** Set when the status document can't be read; replaces the stats it would feed. */
   uploadError?: unknown
   onRetryStats?: () => void
-  onBack: () => void
+  onClose: () => void
 }
 
 /** The terminal state: the record is public on MDRepo, so nothing here is actionable. */
-function PublishedRecord({ recordUrl, upload, uploadError, onRetryStats, onBack }: PublishedRecordProps) {
+function PublishedRecord({ recordUrl, upload, uploadError, onRetryStats, onClose }: PublishedRecordProps) {
   const copyRecordLink = () => {
     if (recordUrl === null) return
     void navigator.clipboard.writeText(recordUrl).then(
@@ -429,7 +409,7 @@ function PublishedRecord({ recordUrl, upload, uploadError, onRetryStats, onBack 
 
       <Separator />
 
-      <PublishFooter onBack={onBack}>
+      <PublishFooter onClose={onClose}>
         {/* Disabled: the API rejects re-publishing a published record; span keeps the tooltip reachable. */}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -456,11 +436,11 @@ const MDPOSIT_FILE_LABELS: Record<string, string> = {
 type MdpositPublishProps = {
   experiment: Experiment
   simulation: Simulation
-  onStepChange: (step: number) => void
+  onClose: () => void
 }
 
 /** MDPosit handoff is stateless: once the package is prepared, download and finish are both open (off-platform). */
-function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublishProps) {
+function MdpositPublish({ experiment, simulation, onClose }: MdpositPublishProps) {
   const prepare = usePublishExperiment()
   const handoff: MDPositPublication | undefined = prepare.data?.status === 201 ? prepare.data.data : undefined
   const unavailableReason = mdpositUnavailableReason(simulation)
@@ -574,7 +554,7 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
     <>
       <StepGuide title="Step by step" label="MDPosit steps" steps={steps} />
       <Separator />
-      <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
+      <PublishFooter onClose={onClose} />
     </>
   )
 }
@@ -591,18 +571,17 @@ function HandoffDownload({ label, file }: { label: string; file: PublicationFile
 }
 
 type PublishFooterProps = {
-  onBack: () => void
+  onClose: () => void
   /** Renders a disabled working-state primary (initial connection check). */
   busy?: boolean
   children?: ReactNode
 }
 
-function PublishFooter({ onBack, busy = false, children }: PublishFooterProps) {
+function PublishFooter({ onClose, busy = false, children }: PublishFooterProps) {
   return (
     <div className="flex items-center justify-end gap-2">
-      <Button type="button" variant="outline" onClick={onBack}>
-        <ArrowLeft aria-hidden />
-        Back
+      <Button type="button" variant="outline" onClick={onClose}>
+        Close
       </Button>
       {busy ? (
         <Button type="button" disabled>

@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test"
 
+import { stepCard } from "./helpers"
+
 test("create an experiment from a PDB id", async ({ page }) => {
   await page.goto("./")
   await page.getByRole("link", { name: "New", exact: true }).click()
@@ -9,7 +11,7 @@ test("create an experiment from a PDB id", async ({ page }) => {
   await page.getByLabel("PDB ID or URL").fill("1LYZ")
   await page.getByRole("button", { name: "Create Experiment" }).click()
 
-  await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+  await expect(stepCard(page, "Setup")).toHaveAttribute("aria-current", "step")
 })
 
 test("opens the provisional experiment immediately and finalizes the import", async ({ page }) => {
@@ -36,7 +38,7 @@ test("opens the provisional experiment immediately and finalizes the import", as
 
   // The demo worker and the API monitor finalize within a few seconds; the
   // provisional experiment then transitions to the ordinary wizard.
-  await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible({ timeout: 30_000 })
+  await expect(stepCard(page, "Setup")).toBeVisible({ timeout: 30_000 })
 })
 
 test("cancels a Datahugger-NG import mid-download", async ({ page }) => {

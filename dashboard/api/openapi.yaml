@@ -2888,8 +2888,8 @@ components:
             $ref: '#/components/schemas/AnalysisJob'
           type: array
         step:
-          type: integer
-          default: 0
+          $ref: '#/components/schemas/Step'
+          default: setup
         status:
           type: string
           default: setup
@@ -3744,9 +3744,7 @@ components:
             type: string
           type: array
         step:
-          type: integer
-          maximum: 3.0
-          minimum: 0.0
+          $ref: '#/components/schemas/Step'
         status:
           type: string
         live:
@@ -3944,6 +3942,14 @@ components:
       - step
       - y
       description: Per-key statistical series.
+    Step:
+      type: string
+      enum:
+      - setup
+      - configuration
+      - simulation
+      - analysis
+      description: Wizard steps of a simulation; declaration order is display order, which clients derive counts from.
     ThicknessResult:
       properties:
         step:

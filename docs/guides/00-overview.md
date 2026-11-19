@@ -23,7 +23,7 @@ Steps unlock automatically as the underlying work completes. Users can always cl
 - **Experiment.** The top-level project unit. Users create it on the **New Experiment** page (`/new`) by picking a curated workflow card (or a custom notebooks repository) and providing a name, an MD engine (GROMACS or AMBER; fixed for the lifetime of the experiment), and initial data (a PDB structure, file upload, or a DOI/repository link).
 - **Simulation manifest (`.simulation.json`).** A small JSON file inside the experiment directory that assigns *roles* to files (run input, topology, coordinates, control file, reference structure, trajectory) and holds extra engine flags. Every job uses it as the single source of truth. The setup notebook creates it, or users create it manually via the simulation form in the Setup step.
 - **Jobs.** Tunings, simulations, analyses, and uploads all run as Kubernetes jobs on the cluster. They keep running even if the user closes the browser; status and logs are available on return. Statuses: PENDING, RUNNING, FINISHED, ERROR, UNKNOWN.
-- **Notebook.** A per-experiment JupyterLab environment (MD workstation with GROMACS, AmberTools, NGL). Users start it on demand from the Home page, the Setup step, or the Analyze step.
+- **Notebook.** A per-experiment JupyterLab environment (MD workstation with GROMACS, AmberTools, NGL). Users start it on demand from the Home page, the Setup card, or the Analysis card.
 - **Personal storage.** All experiment files live on a persistent personal volume and mirror continuously to S3.
 
 ## Where things are
