@@ -69,8 +69,21 @@ async def _experiments(db_session: Session) -> list[Experiment]:
 class TestReconcile:
     """Active operations are driven to a terminal state from the receipt and the worker Job."""
 
+    @pytest.mark.parametrize(
+        "job",
+        [
+            None,
+            SimpleNamespace(status=SimpleNamespace(active=None)),
+            SimpleNamespace(status=SimpleNamespace(active=0)),
+        ],
+        ids=["deleted", "inactive-null", "inactive-zero"],
+    )
     async def test_success_receipt_finalizes_experiment(
-        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+        self,
+        db_session: Session,
+        tmp_path,
+        population_clients: tuple[Clients, AsyncMock],
+        job: object,
     ) -> None:
         """A success receipt with a completed worker merges the dataset and creates the experiment."""
         bundle, k8s = population_clients
@@ -79,7 +92,7 @@ class TestReconcile:
         (staging / "files").mkdir(parents=True)
         (staging / "files" / "data.pdb").write_text("A")
         write_receipt(OPERATION_ID, "succeeded")
-        k8s.read_job.return_value = None  # worker gone (finished / TTL-expired)
+        k8s.read_job.return_value = job  # completed Jobs may report active=None or disappear on TTL expiry
 
         await _reconcile_tick(bundle)
 

@@ -194,7 +194,7 @@ async def _worker_active(clients: Clients, job_name_: str) -> bool:
     job = await clients.k8s.read_job(job_name_)
     status = getattr(job, "status", None)
     active = getattr(status, "active", 0) if status is not None else 0
-    return active > 0
+    return (active or 0) > 0
 
 
 async def _finalize(session: AsyncSession, operation: PopulationOperation) -> None:
