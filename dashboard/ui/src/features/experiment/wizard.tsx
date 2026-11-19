@@ -1,33 +1,41 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, type ReactNode } from "react"
 
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
-import type { Experiment, Simulation } from "@/api/generated/models"
+import { Step, type Experiment, type Simulation } from "@/api/generated/models"
 import { AnalyzeStep } from "@/features/analyze"
-import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
+import { STEP_LABELS, STEPS } from "@/shared/step"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { Stepper, StepperContent } from "@/shared/ui/stepper"
-import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
-import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
+import { Card, CardContent, Skeleton } from "@e-infra/design-system"
 
 import { ArchivedNotice } from "./archived-notice"
-import { WizardStepperHeader } from "./stepper-header"
+import { PublishAction } from "./publish-action"
+import { StepCard, type StepCardState } from "./step-card"
 import { TitleRow } from "./title-row"
 
-const STEPS = [
-  { label: "Setup", icon: Atom },
-  { label: "Tune", icon: SlidersHorizontal },
-  { label: "Run", icon: Play },
-  { label: "Analyze", icon: ChartColumn },
-  { label: "Publish", icon: Upload },
-]
-
-const LAST_STEP = STEPS.length - 1
-
 const SIMULATIONS_POLL_MS = 5000
+
+const CARDS: Record<Step, { lockedReason?: string; foldWhenDone: boolean }> = {
+  setup: { foldWhenDone: true },
+  configuration: { lockedReason: "Available once the setup finishes", foldWhenDone: true },
+  simulation: { lockedReason: "Starts after you choose a configuration", foldWhenDone: false },
+  analysis: { lockedReason: "Available once the run saves its first frames", foldWhenDone: false },
+}
+
+const stepCardId = (step: Step) => `step-${step}`
+
+/** The ladder reports the furthest step; a live run stays current after its frames open Analysis. */
+function cardStates(simulation: Simulation | undefined): Record<Step, StepCardState> {
+  const reached = simulation === undefined ? 0 : STEPS.indexOf(simulation.step)
+  const simulationIndex = STEPS.indexOf(Step.simulation)
+  const current = simulation?.live === true && reached > simulationIndex ? simulationIndex : reached
+  const state = (index: number): StepCardState =>
+    index < current ? "done" : index === current ? "current" : index <= reached ? "open" : "locked"
+  return Object.fromEntries(STEPS.map((step, index) => [step, state(index)])) as Record<Step, StepCardState>
+}
 
 const pollWhileAnyLive =
   (pollMs: number) =>
@@ -44,18 +52,18 @@ const pollWhileRestoring = (query: { state: { data: unknown } }): number | false
 export type WizardSearch = {
   /** Selected simulation tab. simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Current wizard step (0-based); defaults to the simulation's phase: tuning lands on Tune, otherwise waits for a click. */
-  step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource
-  /** Picked tuning trial on the Tune step (dropped when the job is re-tuned). */
+  /** Picked tuning trial in Configuration (dropped when the job is re-tuned). */
   trial?: string
-  /** Tune step view; only the non-default "manual" is worth a param. */
+  /** Configuration view; only the non-default "manual" is worth a param. */
   mode?: "manual"
-  /** Picked analysis on the Analyze step; dropped when switching simulations. */
+  /** Picked analysis; dropped when switching simulations. */
   analysis?: string
-  /** Analyze step tab; only the non-default "analysis" is worth a param. */
+  /** Analysis tab; only the non-default "analysis" is worth a param. */
   tab?: "analysis"
+  /** Publish dialog open. */
+  publish?: true
 }
 
 type ExperimentWizardProps = {
@@ -66,7 +74,7 @@ type ExperimentWizardProps = {
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
   const experiment = useGetExperiment(experimentId, { query: { retry: false, refetchInterval: pollWhileRestoring } })
-  // The wizard heartbeat: the step ladder advances server-side, so the stepper
+  // The wizard heartbeat: the step ladder advances server-side, so the cards
   // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {
     query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
@@ -119,24 +127,19 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // The API owns phase semantics: step is already the stepper index, consumed
-  // with no decode; can_publish unlocks only the experiment-level Publish marker.
-  const ownStep = selected === undefined ? 0 : selected.step
-  const maxStep = selected === undefined ? 0 : ownStep
-  // Publish waits for the viewed simulation to settle; other sims may still run.
-  const publishUnlocked = (data.can_publish ?? false) && !(selected?.live ?? false)
-  const publishReason = publishUnlocked
-    ? undefined
-    : data.can_publish
-      ? "Publishing unlocks once tuning and the run have finished or stopped on this simulation."
-      : "Publish unlocks once a run has finished or been stopped."
-  // Implicit landing: Setup waits for a click-through; tuning work lands on Tune.
-  const requestedStep = search.step ?? (selected?.status === "tuning" ? 1 : ownStep > 1 ? ownStep : 0)
-  const unlocked = requestedStep <= maxStep || (publishUnlocked && requestedStep === LAST_STEP)
-  const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
   const simTab = selected?.simulation_path ?? CREATE_TAB
+  const states = cardStates(selected)
 
-  // Wizard-step params ride along on every navigation so remounts keep user context.
+  // Publish waits for the viewed simulation to settle; other sims may still run.
+  const publishReason = !(data.can_publish ?? false)
+    ? "Publish unlocks once a run has finished or been stopped."
+    : selected === undefined
+      ? "Pick a simulation tab to publish it."
+      : selected.live
+        ? "Publishing unlocks once tuning and the run have finished or stopped on this simulation."
+        : undefined
+
+  // Wizard params ride along on every navigation so remounts keep user context.
   const updateSearch = (next: WizardSearch) =>
     onSearchChange({
       source: search.source,
@@ -151,75 +154,79 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           : simulationParam(next.simulation),
     })
 
-  // Array order must match STEPS. StepperContent renders children by index;
-  // create mode keeps only Setup.
-  const steps = [
-    <SetupStep
-      key="setup"
-      experimentId={experimentId}
-      experiment={data}
-      simulation={selected}
-      creating={creating}
-      source={search.source ?? "notebook"}
-      onSourceChange={(source) => updateSearch({ simulation: simTab, step: search.step, source })}
-      onOpenSimulation={(simulation) => updateSearch({ simulation })}
-      onContinue={() => updateSearch({ simulation: simTab, step: 1 })}
-    />,
-    ...(selected === undefined
-      ? []
-      : [
+  const stepContent = (step: Step): ReactNode => {
+    if (step === Step.setup) {
+      return (
+        <SetupStep
+          experimentId={experimentId}
+          experiment={data}
+          simulation={selected}
+          creating={creating}
+          source={search.source ?? "notebook"}
+          onSourceChange={(source) => updateSearch({ simulation: simTab, source })}
+          onOpenSimulation={(simulation) => updateSearch({ simulation })}
+        />
+      )
+    }
+    // Later cards stay locked on the create tab, so they never render without a simulation.
+    if (selected === undefined) return null
+    switch (step) {
+      case Step.configuration:
+        return (
           <TuneStep
-            key="tune"
             experimentId={experimentId}
             engine={data.engine}
             simulation={selected}
             trialId={search.trial}
             mode={search.mode ?? "tuning"}
-            onTrialIdChange={(trial) => updateSearch({ simulation: simTab, step: search.step, trial })}
+            onTrialIdChange={(trial) => updateSearch({ simulation: simTab, trial })}
             onModeChange={(mode) =>
-              updateSearch({
-                simulation: simTab,
-                step: search.step,
-                mode: mode === "manual" ? "manual" : undefined,
-              })
+              updateSearch({ simulation: simTab, mode: mode === "manual" ? "manual" : undefined })
             }
-            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
-          />,
-          <RunStep
-            key="run"
-            experimentId={experimentId}
-            engine={data.engine}
-            simulation={selected}
-            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
-          />,
+            onRunStarted={() => document.getElementById(stepCardId(Step.simulation))?.scrollIntoView?.()}
+          />
+        )
+      case Step.simulation:
+        return <RunStep experimentId={experimentId} engine={data.engine} simulation={selected} />
+      case Step.analysis:
+        return (
           <AnalyzeStep
-            key="analyze"
             experimentId={experimentId}
             engine={data.engine}
             simulation={selected}
             selectedAnalysis={search.analysis}
-            onSelectedAnalysisChange={(analysis) => updateSearch({ simulation: simTab, step: search.step, analysis })}
+            onSelectedAnalysisChange={(analysis) => updateSearch({ simulation: simTab, analysis })}
             tab={search.tab ?? "trajectory"}
             onTabChange={(next) =>
-              updateSearch({ simulation: simTab, step: search.step, tab: next === "analysis" ? "analysis" : undefined })
+              updateSearch({ simulation: simTab, tab: next === "analysis" ? "analysis" : undefined })
             }
-            publishReason={publishReason}
-            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
-          />,
-          <PublishStep
-            key="publish"
-            experiment={data}
-            simulation={selected}
-            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
-            // Re-asserting the typed search drops the MDRepo OAuth params from the URL.
-            onOAuthHandled={() => updateSearch({ simulation: simTab, step })}
-          />,
-        ]),
-  ]
+          />
+        )
+    }
+  }
+
+  const doneNote = (step: Step): string | undefined => {
+    if (step === Step.setup && selected !== undefined) return `“${selected.name}” is ready`
+    if (step === Step.configuration) return "Run configuration chosen"
+    return undefined
+  }
 
   return (
     <section className="space-y-6 md:space-y-8">
-      <TitleRow experiment={data} />
+      <TitleRow
+        experiment={data}
+        action={
+          <PublishAction
+            experiment={data}
+            simulation={selected}
+            reason={publishReason}
+            open={search.publish === true}
+            onOpenChange={(open) => updateSearch({ simulation: simTab, publish: open ? true : undefined })}
+            // Re-asserting the typed search drops the MDRepo OAuth params and keeps the dialog open.
+            onOAuthHandled={() => updateSearch({ simulation: simTab, publish: true })}
+          />
+        }
+      />
 
       <div>
         <SimulationTabs
@@ -243,24 +250,28 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         {/* box-shadow over drop-shadow: filter would confine molstar's expanded (fixed) viewport to this card. */}
         <Card className="border-border bg-background rounded-t-none border py-0 shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
           <CardContent className="pt-6 pb-6">
-            <Stepper
-              step={step}
-              totalSteps={STEPS.length}
-              onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
-            >
-              <WizardStepperHeader
-                experimentId={experimentId}
-                engine={data.engine}
-                simulation={selected}
-                steps={STEPS}
-                maxStep={maxStep}
-                unlockedIndexes={publishUnlocked ? [LAST_STEP] : []}
-                publishReason={publishReason}
-                pollMs={SIMULATIONS_POLL_MS}
-              />
-              <Separator className="mt-4" />
-              <StepperContent>{steps}</StepperContent>
-            </Stepper>
+            {/* Keyed by tab: fold state and step-local state belong to one simulation. */}
+            <ol key={simTab} role="list" aria-label="Steps" className="space-y-4">
+              {STEPS.map((step, index) => (
+                <StepCard
+                  key={step}
+                  id={stepCardId(step)}
+                  position={index + 1}
+                  title={STEP_LABELS[step]}
+                  state={states[step]}
+                  note={
+                    states[step] === "locked"
+                      ? CARDS[step].lockedReason
+                      : states[step] === "done"
+                        ? doneNote(step)
+                        : undefined
+                  }
+                  foldWhenDone={CARDS[step].foldWhenDone}
+                >
+                  {stepContent(step)}
+                </StepCard>
+              ))}
+            </ol>
           </CardContent>
         </Card>
       </div>

@@ -4,7 +4,6 @@ import { expect, test } from "@playwright/test"
 // E2E mode completes the submitted analysis in 0.5s. The UI notices it on its 5s poll.
 test("submit an RMSD analysis to completion", async ({ page }) => {
   await page.goto("experiments/bbbbb")
-  await page.getByRole("button", { name: /Go to section 4: Analyze/ }).click()
   await page.getByRole("tab", { name: "Analyze" }).click()
 
   await page.getByRole("combobox", { name: "Analysis" }).click()

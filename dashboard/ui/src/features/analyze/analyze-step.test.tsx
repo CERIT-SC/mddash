@@ -5,7 +5,7 @@ import type { FetchCall } from "@/shared/fixtures/mock-fetch"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -164,7 +164,6 @@ function mockAnalyze(options: MockAnalyzeOptions = {}) {
 
 function renderAnalyze(props: Partial<React.ComponentProps<typeof AnalyzeStep>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const spies = { onStepChange: props.onStepChange ?? vi.fn() }
   const { selectedAnalysis, onSelectedAnalysisChange, tab, onTabChange, ...rest } = props
   const pick = { current: selectedAnalysis }
   // The pick and tab are URL-owned in production; the harness holds them
@@ -181,19 +180,17 @@ function renderAnalyze(props: Partial<React.ComponentProps<typeof AnalyzeStep>> 
           experimentId="exp1"
           engine="GMX"
           simulation={READY_SIM}
-          publishReason={undefined}
           selectedAnalysis={analysis}
           onSelectedAnalysisChange={onSelectedAnalysisChange ?? setAnalysis}
           tab={view}
           onTabChange={onTabChange ?? setView}
-          {...spies}
           {...rest}
         />
       </QueryClientProvider>
     )
   }
   render(<Harness />)
-  return { spies, pick }
+  return { pick }
 }
 
 /** The panel lives on the second tab; the trajectory viewer is the default. */
@@ -205,31 +202,35 @@ beforeEach(() => renderSpy.mockClear())
 afterEach(() => vi.unstubAllGlobals())
 
 describe("AnalyzeStep layout", () => {
-  it("renders the heading, tabs, and Back/Publish navigation", async () => {
+  it("renders the trajectory and analysis tabs", async () => {
     mockAnalyze()
-    const { spies } = renderAnalyze()
+    renderAnalyze()
 
-    expect(await screen.findByText("Analyze the results")).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "View Trajectories" })).toBeInTheDocument()
+    expect(await screen.findByRole("tab", { name: "View Trajectories" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "Analyze" })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole("button", { name: /back/i }))
-    expect(spies.onStepChange).toHaveBeenCalledWith(2)
-
-    await userEvent.click(screen.getByRole("button", { name: /publish/i }))
-    expect(spies.onStepChange).toHaveBeenCalledWith(4)
   })
 
-  it("disables Publish while the step is still locked, explaining why", async () => {
-    mockAnalyze()
-    renderAnalyze({ publishReason: "Publishing unlocks once tuning and the run have finished or stopped." })
-
-    const publish = await screen.findByRole("button", { name: "Publish" })
-    expect(publish).toBeDisabled()
-    await userEvent.hover(publish.parentElement as HTMLElement)
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "Publishing unlocks once tuning and the run have finished or stopped."
+  it("mounts the trajectory viewer only once it nears the viewport", async () => {
+    let reveal = () => undefined as void
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(callback: IntersectionObserverCallback) {
+          reveal = () =>
+            callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver)
+        }
+        observe() {}
+        disconnect() {}
+      }
     )
+    mockAnalyze()
+    renderAnalyze()
+
+    expect(await screen.findByRole("tab", { name: "View Trajectories" })).toBeInTheDocument()
+    expect(screen.queryByTestId("mol-star")).not.toBeInTheDocument()
+
+    act(() => reveal())
+    expect(await screen.findByTestId("mol-star")).toBeInTheDocument()
   })
 
   it("shows the still-running alert with progress while the simulation runs", async () => {
@@ -542,8 +543,7 @@ describe("AnalyzeStep tab", () => {
     const onTabChange = vi.fn()
     renderAnalyze({ tab: "analysis", onTabChange })
 
-    expect(await screen.findByText("Analyze the results")).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Analyze" })).toHaveAttribute("aria-selected", "true")
+    expect(await screen.findByRole("tab", { name: "Analyze" })).toHaveAttribute("aria-selected", "true")
     expect(screen.getByRole("tab", { name: "View Trajectories" })).toHaveAttribute("aria-selected", "false")
 
     await userEvent.click(screen.getByRole("tab", { name: "View Trajectories" }))

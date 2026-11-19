@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 
 import { toApiError } from "@/api/errors"
 import { getGetExperimentQueryKey, getListExperimentsQueryKey, useUpdateExperiment } from "@/api/generated/client"
@@ -33,7 +33,8 @@ function shortRepo(repo: string): string {
   }
 }
 
-export function TitleRow({ experiment }: { experiment: Experiment }) {
+/** `action` sits at the row's end, e.g. the experiment-level Publish button. */
+export function TitleRow({ experiment, action }: { experiment: Experiment; action?: ReactNode }) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
   const [nextName, setNextName] = useState(experiment.name)
@@ -105,6 +106,7 @@ export function TitleRow({ experiment }: { experiment: Experiment }) {
           </span>
         ))}
       </div>
+      {action !== undefined && <div className="ml-auto">{action}</div>}
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
         <DialogContent>

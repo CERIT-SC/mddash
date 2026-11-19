@@ -4,8 +4,7 @@ import { useListExperimentFiles, useListSimulations } from "@/api/generated/clie
 import type { Experiment, Simulation } from "@/api/generated/models"
 import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
 import { SimulationForm } from "@/features/simulation"
-import { Button, H4, Separator, Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
-import { ArrowRight } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { toast } from "sonner"
 
 import { SetupGuide } from "./setup-guide"
@@ -24,7 +23,6 @@ type SetupStepProps = {
   source: SetupSource
   onSourceChange: (source: SetupSource) => void
   onOpenSimulation: (simulationPath: string) => void
-  onContinue: () => void
 }
 
 export function SetupStep({
@@ -35,7 +33,6 @@ export function SetupStep({
   source,
   onSourceChange,
   onOpenSimulation,
-  onContinue,
 }: SetupStepProps) {
   // Polls: the pipeline writes the manifest from inside the notebook, so only a poll notices it.
   const simulationsQuery = useListSimulations(experimentId, { query: { refetchInterval: SIMULATIONS_POLL_MS } })
@@ -68,13 +65,10 @@ export function SetupStep({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1">
-        <H4>Set up your simulation</H4>
-        <p className="text-text-muted text-sm">
-          Run the setup notebook to generate a simulation manifest, or create one manually. At least one valid setup is
-          required to continue.
-        </p>
-      </div>
+      <p className="text-text-muted text-sm">
+        Run the setup notebook to generate a simulation manifest, or create one manually. At least one valid setup is
+        required to continue.
+      </p>
 
       <Tabs value={source} onValueChange={(value) => onSourceChange(value as SetupSource)}>
         <TabsList aria-label="Setup source">
@@ -121,15 +115,6 @@ export function SetupStep({
           />
         </TabsContent>
       </Tabs>
-
-      <Separator />
-
-      <div className="flex items-center justify-end gap-2">
-        <Button type="button" disabled={simulation === undefined} onClick={onContinue}>
-          Go to Tune
-          <ArrowRight aria-hidden />
-        </Button>
-      </div>
     </div>
   )
 }

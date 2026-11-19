@@ -1,6 +1,6 @@
-# Step 5 Publish
+# Publish
 
-The Publish step makes experiment results publicly accessible and citable. It is an experiment-level step (wizard step 5) with the heading **"Publish your experiment (optional)"** and *"Upload the experiment's data to a public repository to make it citable, or hand it off to MDPosit."* It unlocks once a simulation job has FINISHED or an MDRepo draft/published record already exists (the Analyze step's **"Publish"** button carries the tooltip "Available once this simulation is ready to publish" while it does not). Two targets exist: **MDRepo** (InvenioRDM repository, default) and **MDPosit** (export-only handoff, GROMACS experiments only).
+Publishing makes experiment results publicly accessible and citable. It is experiment-level: the **"Publish…"** button at the end of the title row opens the **"Publish your experiment"** dialog (*"Upload the experiment's data to a public repository to make it citable, or hand it off to MDPosit."*), closed again with **"Close"**. The button unlocks once a run has finished or been stopped or an MDRepo draft/published record already exists; until then, a note under it explains why. Two targets exist: **MDRepo** (InvenioRDM repository, default) and **MDPosit** (export-only handoff, GROMACS experiments only).
 
 ## Publishing to MDRepo
 

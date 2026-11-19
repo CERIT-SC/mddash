@@ -67,9 +67,12 @@ export function SetupGuide({
         ) : null,
     },
     {
-      title: "Go to Tune",
+      title: "Continue to Configuration",
       state: step3,
-      body: step3 === "active" ? <Small>Check the validity of data below and move on to tune.</Small> : null,
+      body:
+        step3 === "active" ? (
+          <Small>Check the validity of data below. Configuration opens once it is valid.</Small>
+        ) : null,
     },
   ]
 

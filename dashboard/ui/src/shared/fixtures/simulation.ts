@@ -1,4 +1,4 @@
-import type { Simulation } from "@/api/generated/models"
+import { Step, type Simulation } from "@/api/generated/models"
 
 export function simulation(path: string, overrides: Partial<Simulation> = {}): Simulation {
   return {
@@ -12,7 +12,7 @@ export function simulation(path: string, overrides: Partial<Simulation> = {}): S
     valid: false,
     errors: [],
     missing_files: [],
-    step: 0,
+    step: Step.setup,
     status: "setup",
     live: false,
     last_activity: 0,

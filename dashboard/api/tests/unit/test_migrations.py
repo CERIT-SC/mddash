@@ -347,3 +347,32 @@ def test_migration_014_collapses_to_one_run_per_simulation(tmp_path: Path) -> No
                 "VALUES ('dup', 'aaaaa', 'a.simulation.json', '2026-01-03', 'GMX', 1, 1)"
             )
         )
+
+
+def test_migration_015_converts_archived_step_to_step_names(tmp_path: Path) -> None:
+    """Archive snapshots move from phase ints to Step member names; old publish (4) lands on analysis."""
+    app = _MigratedDb(tmp_path / "test.db")
+    _upgrade_to(app, "014")
+    app.session.execute(
+        sa.text(
+            "INSERT INTO experiments (id, created_at, updated_at, name, engine, archived_step) VALUES "
+            "('s0', '2026-01-01', '2026-01-01', 'a', 'GMX', 0), "
+            "('s1', '2026-01-01', '2026-01-01', 'b', 'GMX', 1), "
+            "('s2', '2026-01-01', '2026-01-01', 'c', 'GMX', 2), "
+            "('s3', '2026-01-01', '2026-01-01', 'd', 'GMX', 3), "
+            "('s4', '2026-01-01', '2026-01-01', 'e', 'GMX', 4), "
+            "('sn', '2026-01-01', '2026-01-01', 'f', 'GMX', NULL)"
+        )
+    )
+    app.session.commit()
+
+    _upgrade_to(app, "head")
+    rows = dict(app.session.execute(sa.text("SELECT id, archived_step FROM experiments")).tuples().all())
+    assert rows == {
+        "s0": "SETUP",
+        "s1": "CONFIGURATION",
+        "s2": "SIMULATION",
+        "s3": "ANALYSIS",
+        "s4": "ANALYSIS",
+        "sn": None,
+    }

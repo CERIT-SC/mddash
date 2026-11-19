@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from clients import Clients
-from core.enums import Engine, JobStatus
+from core.enums import Engine, JobStatus, Step
 from core.errors import ApiError, BadRequest
 from httpx import AsyncClient
 from modules.jobs.amber.schemas import AmberJob as AmberJobSchema
@@ -791,14 +791,13 @@ class TestStepStatus:
         seed_experiment: SeedExperiment,
         jobs: JobsService,
     ) -> None:
-        """A valid manifest with no jobs sits at step 1."""
+        """A valid manifest with no jobs opens Configuration."""
         exp_id, exp_dir = await seed_experiment()
         write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
         sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
-        assert sim.step == 1
+        assert sim.step == Step.CONFIGURATION
         assert sim.status == "setup complete"
-        assert sim.step == 1
 
     async def test_invalid_manifest_is_setup(
         self,
@@ -807,12 +806,12 @@ class TestStepStatus:
         seed_experiment: SeedExperiment,
         jobs: JobsService,
     ) -> None:
-        """An invalid manifest sits at step 0."""
+        """An invalid manifest stays in Setup."""
         exp_id, exp_dir = await seed_experiment()
         write_simulation(exp_dir, "broken.simulation.json", {"run_input": "production/p.tpr"})
 
         sim = await _sim(db_session, jobs, exp_id, "broken.simulation.json")
-        assert sim.step == 0
+        assert sim.step == Step.SETUP
         assert sim.status == "setup"
 
     async def test_ladder_is_scoped_per_manifest(
@@ -835,12 +834,12 @@ class TestStepStatus:
 
         protein = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         ligand = await _sim(db_session, jobs, exp_id, "ligand.simulation.json")
-        assert protein.step == 3
+        assert protein.step == Step.ANALYSIS
         assert protein.status == "analyzing"
-        assert ligand.step == 1
+        assert ligand.step == Step.CONFIGURATION
         assert ligand.status == "setup complete"
 
-    async def test_pending_sim_job_stays_at_step_two(
+    async def test_pending_sim_job_is_at_simulation(
         self,
         db_session: AsyncSession,
         tmp_path: Path,
@@ -853,10 +852,10 @@ class TestStepStatus:
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
 
         sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
-        assert sim.step == 2
+        assert sim.step == Step.SIMULATION
         assert sim.status == "simulating"
 
-    async def test_running_sim_job_stays_at_step_two_until_progress_is_known(
+    async def test_running_sim_job_stays_at_simulation_until_progress_is_known(
         self,
         db_session: AsyncSession,
         tmp_path: Path,
@@ -869,7 +868,7 @@ class TestStepStatus:
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
 
         sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
-        assert sim.step == 2
+        assert sim.step == Step.SIMULATION
         assert sim.status == "simulating"
 
     async def test_running_sim_job_activates_analyze_once_progress_is_known(
@@ -895,17 +894,17 @@ class TestStepStatus:
         )
 
         sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
-        assert sim.step == 3
+        assert sim.step == Step.ANALYSIS
         assert sim.status == "simulating"
 
-    async def test_tuner_trials_give_step_two(
+    async def test_tuner_trials_stay_in_configuration(
         self,
         db_session: AsyncSession,
         tmp_path: Path,
         seed_experiment: SeedExperiment,
         jobs: JobsService,
     ) -> None:
-        """A tuner trial with performance lifts only its own simulation to step 2 (no live API call)."""
+        """Trials with performance keep tuning in Configuration, which starts the run itself (no live API call)."""
         exp_id, exp_dir = await seed_experiment()
         write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
@@ -921,7 +920,7 @@ class TestStepStatus:
         await db_session.commit()
 
         sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
-        assert sim.step == 2
+        assert sim.step == Step.CONFIGURATION
         assert sim.status == "tuning"
 
     async def test_pending_and_running_jobs_are_live(
@@ -1131,11 +1130,11 @@ class TestExperimentDelegation:
     async def test_no_manifests_is_setup(
         self, db_session: AsyncSession, seed_experiment: SeedExperiment, jobs: JobsService
     ) -> None:
-        """An experiment without manifests sits at step 0."""
+        """An experiment without manifests stays in Setup."""
         exp_id, _ = await seed_experiment()
         experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
-        assert experiment.step == 0
+        assert experiment.step == Step.SETUP
         assert experiment.status == "setup"
 
     async def test_experiment_inherits_latest_simulation(
@@ -1159,7 +1158,7 @@ class TestExperimentDelegation:
 
         experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
-        assert experiment.step == 1
+        assert experiment.step == Step.CONFIGURATION
         assert experiment.status == "setup complete"
 
     async def test_just_started_job_makes_its_sim_latest(
@@ -1180,8 +1179,8 @@ class TestExperimentDelegation:
         assert experiment is not None
         protein = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert protein.last_activity >= 1_700_200_000
-        # job row without timestamps still lifts its simulation (created_at) to latest — step 2
-        assert experiment.step == 2
+        # job row without timestamps still lifts its simulation (created_at) to latest
+        assert experiment.step == Step.SIMULATION
         assert experiment.status == "simulating"
 
     async def test_analysis_job_makes_its_sim_latest(
@@ -1222,7 +1221,7 @@ class TestExperimentDelegation:
         seed_experiment: SeedExperiment,
         jobs: JobsService,
     ) -> None:
-        """Published/publishing (step 4) beats the latest simulation's step."""
+        """Published/publishing keep the analysis step and override the latest simulation's status."""
         exp_id, exp_dir = await seed_experiment()
         write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
@@ -1230,13 +1229,13 @@ class TestExperimentDelegation:
         assert experiment is not None
 
         experiment.mdrepo_published = True
-        assert experiment.step == 4
+        assert experiment.step == Step.ANALYSIS
         assert experiment.status == "published"
 
         # the ladder is memoized per instance (one request); reset to observe the state change
         experiment._memo_step = None
         experiment.mdrepo_published = False
-        assert experiment.step == 4
+        assert experiment.step == Step.ANALYSIS
         assert experiment.status == "publishing"
 
 
@@ -1307,7 +1306,7 @@ class TestCanPublish:
 
         experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
-        assert experiment.step == 1  # ligand is newer — the ladder follows it
+        assert experiment.step == Step.CONFIGURATION  # ligand is newer — the ladder follows it
         assert experiment.can_publish is True
 
     async def test_draft_unlocks_without_any_run(

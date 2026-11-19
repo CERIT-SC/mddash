@@ -1,4 +1,4 @@
-import type { Experiment, PodStatus } from "@/api/generated/models"
+import { Step, type Experiment, type PodStatus } from "@/api/generated/models"
 
 export function experiment(id: string, overrides: Partial<Experiment> = {}): Experiment {
   return {
@@ -13,7 +13,7 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     tuner_jobs: [],
     simulation_jobs: [],
     analysis_jobs: [],
-    step: 1,
+    step: Step.configuration,
     status: "setup complete",
     archived_at: null,
     archive_state: null,

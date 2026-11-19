@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-import { demoDataFile } from "./helpers"
+import { demoDataFile, stepCard } from "./helpers"
 
 test("manual setup: upload files and create a GROMACS simulation", async ({ page }) => {
   await page.goto("new")
@@ -10,7 +10,7 @@ test("manual setup: upload files and create a GROMACS simulation", async ({ page
   await page.getByRole("tab", { name: "Upload Files" }).click()
   await page.locator('input[type="file"]').setInputFiles([demoDataFile("md.tpr"), demoDataFile("structure.pdb")])
   await page.getByRole("button", { name: "Create Experiment" }).click()
-  await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+  await expect(stepCard(page, "Setup")).toHaveAttribute("aria-current", "step")
 
   await page.getByRole("tab", { name: "Manual" }).click()
   await page.getByRole("combobox", { name: "Run input (.tpr)" }).click()
@@ -22,5 +22,5 @@ test("manual setup: upload files and create a GROMACS simulation", async ({ page
   await page.getByRole("button", { name: "Create simulation" }).click()
 
   await expect(page.getByRole("tab", { name: "md", exact: true })).toBeVisible()
-  await expect(page.getByRole("button", { name: "Go to Tune" })).toBeEnabled()
+  await expect(stepCard(page, "Configuration")).toHaveAttribute("aria-current", "step")
 })
