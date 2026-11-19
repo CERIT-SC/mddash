@@ -68,13 +68,13 @@ class TestBuildJobManifest:
             "https://github.com/test/dataset",
         ]
 
-    def test_manifest_carries_no_credentials_or_env(self) -> None:
+    def test_manifest_carries_only_required_nonsecret_config(self) -> None:
         with patch("modules.population.submission.API_IMAGE", "registry/mddash-api:dev"):
             manifest = build_job_manifest(_operation())
 
         container = manifest["spec"]["template"]["spec"]["containers"][0]
-        # No environment and no non-public arguments: a notebook access token has no place here.
-        assert container["env"] == []
+        # The API's required notebook-limit setting is safe to inherit; no access token belongs here.
+        assert container["env"] == [{"name": "NS_MAX_NOTEBOOKS", "value": "2"}]
         assert "access" not in json.dumps(container["args"]).lower()
 
     def test_worker_job_is_bounded_tokenless_and_non_root(self) -> None:

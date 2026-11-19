@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from core.config import API_IMAGE
+from core.config import API_IMAGE, MAX_NOTEBOOKS
 from core.worker_jobs import EXPERIMENT_LABEL, SubmissionError, delete_worker_job, dns1123_name, worker_job_manifest
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ def build_job_manifest(operation: PopulationOperation) -> dict[str, Any]:
     """
     Worker Job on the shared PVC running the API image's population worker.
 
-    Carries only the public repository URL: no notebook token, no credentials.
+    Carries the public repository URL and non-secret configuration: no notebook token or credentials.
     """
     return worker_job_manifest(
         name=operation.job_name,
@@ -45,7 +45,7 @@ def build_job_manifest(operation: PopulationOperation) -> dict[str, Any]:
             "--repo-url",
             operation.repo_url,
         ],
-        env=[],
+        env=[{"name": "NS_MAX_NOTEBOOKS", "value": str(MAX_NOTEBOOKS)}],
     )
 
 

@@ -18,6 +18,7 @@ from core.config import DATA_DIR
 from core.enums import JobStatus, NotebookTier, PodStatus
 from modules.archive.status import ArchiveStatus
 from modules.archive.status import write_status as write_archive_status
+from modules.population.downloader import ERROR_VALIDATION
 from modules.population.receipt import write_receipt as write_population_receipt
 from modules.publishing.status import UploadStatus, read_status
 from modules.publishing.status import write_status as write_upload_status
@@ -140,10 +141,9 @@ def _finish_population_job(job_name: str, operation_id: str, repo_url: str) -> N
     time.sleep(POPULATION_JOB_DURATION_SEC)
 
     from modules.population.receipt import staging_dir  # ruff:ignore[import-outside-top-level]
-    from modules.population.worker import RECEIPT_ERROR_DOWNLOAD_FAILED  # ruff:ignore[import-outside-top-level]
 
     if "demo-fail" in repo_url:
-        write_population_receipt(operation_id, "failed", RECEIPT_ERROR_DOWNLOAD_FAILED)
+        write_population_receipt(operation_id, "failed", ERROR_VALIDATION)
         demo_state.population_jobs.pop(job_name, None)
         return
 

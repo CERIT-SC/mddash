@@ -39,7 +39,18 @@ POPULATION_MONITOR_INTERVAL_SECONDS = 5
 
 # Stable, user-safe failure texts; raw native details remain in server logs.
 ERROR_SUBMISSION_FAILED = "The repository download could not be started."
-ERROR_WORKER_FAILED = "The repository download worker failed."
+ERROR_WORKER_FAILED = (
+    "The repository download worker stopped without reporting a result. "
+    "Contact support; they can inspect the short-term worker logs for this operation."
+)
+ERROR_WORKER_VANISHED = (
+    "The repository download worker is no longer available and did not report a result. "
+    "Try again or contact support if the failure persists."
+)
+ERROR_WORKER_EXITED = (
+    "The repository download worker exited without reporting a successful download. "
+    "Contact support; they can inspect the short-term worker logs for this operation."
+)
 ERROR_MERGE_FAILED = "The repository content could not be merged into the experiment."
 
 # One lock per event loop: serializes submission and reconciliation in this
@@ -160,12 +171,19 @@ async def _reconcile(session: AsyncSession, clients: Clients, operation: Populat
         return
 
     state = await clients.k8s.get_job_status(operation.job_name)
+    if state in {JobStatus.ERROR, JobStatus.FINISHED}:
+        # No usable receipt: preserve raw pod evidence only in server logs before the finite job TTL.
+        logs = await clients.k8s.get_job_logs(operation.job_name)
+        if logs:
+            logger.error("Population %s failed worker %s logs:\n%s", operation.id, operation.job_name, logs)
     if state is JobStatus.FINISHED:
         # The worker exited without a valid success receipt.
+        await _fail(session, operation, ERROR_WORKER_EXITED)
+    elif state is JobStatus.ERROR:
+        # Failed or deadlined without a valid success receipt.
         await _fail(session, operation, ERROR_WORKER_FAILED)
-    elif state in {JobStatus.ERROR, JobStatus.UNKNOWN}:
-        # Failed, deadlined, or vanished without a valid success receipt.
-        await _fail(session, operation, ERROR_WORKER_FAILED)
+    elif state is JobStatus.UNKNOWN:
+        await _fail(session, operation, ERROR_WORKER_VANISHED)
     elif operation.status is PopulationStatus.queued:
         operation.status = PopulationStatus.running
         await session.commit()

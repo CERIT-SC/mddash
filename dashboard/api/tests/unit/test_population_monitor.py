@@ -11,7 +11,13 @@ from core.enums import Engine, JobStatus, PopulationStatus, SourceType
 from modules.models import Experiment, Notebook
 from modules.population.models import PopulationOperation
 from modules.population.receipt import staging_dir, write_receipt
-from modules.population.service import ERROR_MERGE_FAILED, ERROR_WORKER_FAILED, _reconcile_tick
+from modules.population.service import (
+    ERROR_MERGE_FAILED,
+    ERROR_WORKER_EXITED,
+    ERROR_WORKER_FAILED,
+    ERROR_WORKER_VANISHED,
+    _reconcile_tick,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as Session
 
@@ -138,25 +144,40 @@ class TestReconcile:
         assert not (tmp_path / EXPERIMENT_ID).exists()
 
     @pytest.mark.parametrize(
-        "job_status",
-        [JobStatus.FINISHED, JobStatus.ERROR, JobStatus.UNKNOWN],
+        ("job_status", "expected"),
+        [
+            (JobStatus.FINISHED, ERROR_WORKER_EXITED),
+            (JobStatus.ERROR, ERROR_WORKER_FAILED),
+            (JobStatus.UNKNOWN, ERROR_WORKER_VANISHED),
+        ],
         ids=["finished-without-receipt", "error", "vanished"],
     )
     async def test_dead_worker_without_receipt_fails(
-        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock], job_status: JobStatus
+        self,
+        db_session: Session,
+        tmp_path,
+        population_clients: tuple[Clients, AsyncMock],
+        job_status: JobStatus,
+        expected: str,
     ) -> None:
-        """A finished, errored, or vanished worker without a valid success receipt is a durable failure."""
+        """A finished, errored, or vanished worker without a success receipt explains its distinct state."""
         bundle, k8s = population_clients
         await _seed_operation(db_session, tmp_path)
         k8s.get_job_status.return_value = job_status
+        k8s.get_job_logs.return_value = "Traceback: native secret details"
 
         await _reconcile_tick(bundle)
 
         operation = await _operation(db_session)
         assert operation.status is PopulationStatus.failed
-        assert operation.error == ERROR_WORKER_FAILED
+        assert operation.error == expected
+        assert "native" not in operation.error
         assert await _experiments(db_session) == []
         assert not (tmp_path / EXPERIMENT_ID).exists()
+        if job_status is JobStatus.UNKNOWN:
+            k8s.get_job_logs.assert_not_awaited()
+        else:
+            k8s.get_job_logs.assert_awaited_once_with(operation.job_name)
 
     async def test_live_worker_marks_operation_running(
         self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]

@@ -200,6 +200,7 @@ describe("CreateExperimentDialog", () => {
 
 const POPULATION_OPERATION_ID = "op0123456789abcdef"
 const POPULATION_EXPERIMENT_ID = "popexp1"
+const ERROR_VALIDATION = "The downloaded repository files failed size or checksum validation."
 
 /** Create answers 202 and the status endpoint serves the given statuses in order (last one sticks). */
 function stubPopulationApi(statuses: { status: string; error?: string | null }[]) {
@@ -290,7 +291,7 @@ describe("CreateExperimentDialog — Datahugger-NG population", () => {
   })
 
   it("shows a durable failure alert and stops polling when the population fails", { timeout: 15000 }, async () => {
-    const api = stubPopulationApi([{ status: "failed", error: "The repository download failed." }])
+    const api = stubPopulationApi([{ status: "failed", error: ERROR_VALIDATION }])
     const user = userEvent.setup()
     const { router } = await renderPage()
 
@@ -303,7 +304,7 @@ describe("CreateExperimentDialog — Datahugger-NG population", () => {
 
     // durable inline alert, dialog stays open, submit stays disabled
     expect(await screen.findByText("Experiment creation failed")).toBeVisible()
-    expect(screen.getByText("The repository download failed.")).toBeVisible()
+    expect(screen.getByText(ERROR_VALIDATION)).toBeVisible()
     expect(footerClose()).toBeVisible()
     expect(screen.getByRole("button", { name: "Create Experiment" })).toBeDisabled()
 

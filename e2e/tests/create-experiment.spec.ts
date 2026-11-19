@@ -43,6 +43,6 @@ test("shows a durable error when Datahugger-NG population fails", async ({ page 
 
   // the terminal failure stays in the dialog, not a toast
   await expect(page.getByText("Experiment creation failed")).toBeVisible()
-  await expect(page.getByText("The repository download failed.")).toBeVisible()
+  await expect(page.getByText("The downloaded repository files failed size or checksum validation.")).toBeVisible()
   await expect(page.getByRole("button", { name: "Create Experiment" })).toBeDisabled()
 })

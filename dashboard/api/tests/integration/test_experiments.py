@@ -22,7 +22,10 @@ from fastapi import FastAPI
 from httpx import AsyncClient
 from modules.mdrepo.dependencies import get_tokens
 from modules.models import Experiment, Notebook
+from modules.population.downloader import ERROR_VALIDATION
 from modules.population.models import PopulationOperation
+from modules.population.receipt import write_receipt
+from modules.population.service import _reconcile
 from modules.population.submission import job_name
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as Session
@@ -755,7 +758,9 @@ class TestCreateDatahugger:
             "--repo-url",
             "https://github.com/test/dataset",
         ]
-        assert container["env"] == []
+        # The worker imports core.config through its receipt helpers; this required
+        # non-secret setting must be present or it exits before the first receipt.
+        assert container["env"] == [{"name": "NS_MAX_NOTEBOOKS", "value": "2"}]
         assert "secret-notebook-token" not in json.dumps(manifest)
 
         # Bounded, retry-free, non-root, on the shared PVC.
@@ -883,6 +888,30 @@ class TestPopulationJobStatus:
             "experiment_id": created["experiment_id"],
             "status": "queued",
             "error": None,
+        }
+
+    async def test_status_exposes_only_the_curated_failure(
+        self,
+        client: AsyncClient,
+        db_session: Session,
+        clients: Clients,
+        git: SimpleNamespace,
+        population_k8s: SimpleNamespace,
+    ) -> None:
+        """A failed worker receipt reaches the status response unchanged and without native details."""
+        created = (await client.post("/dash/api/experiments", data=_datahugger_form())).json()
+        operation = (await db_session.execute(select(PopulationOperation))).scalars().one()
+        write_receipt(operation.id, "failed", ERROR_VALIDATION)
+
+        await _reconcile(db_session, clients, operation)
+        response = await client.get(f"/dash/api/experiment-population-jobs/{created['operation_id']}")
+
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {
+            "operation_id": created["operation_id"],
+            "experiment_id": created["experiment_id"],
+            "status": "failed",
+            "error": ERROR_VALIDATION,
         }
 
     async def test_status_unknown_operation_404(self, client: AsyncClient) -> None:
