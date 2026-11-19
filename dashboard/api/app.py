@@ -23,6 +23,8 @@ from modules.jobs.tuner import router as tuner
 from modules.mdrepo import router as mdrepo
 from modules.notebooks import router as notebooks
 from modules.notebooks.catalog import load_catalog_or_exit
+from modules.population import router as population
+from modules.population.service import run_population_monitor
 from modules.publishing import router as publishing
 from modules.simulations import router as simulations
 from modules.system import router as system
@@ -35,14 +37,29 @@ DU_MONITOR_START_DELAY_SECONDS = 10.0
 DB_PATH_NAME = "experiments.db"
 
 # Inclusion order is the path order of the generated OpenAPI document.
-ROUTERS = (system, experiments, publishing, archive, mdrepo, files, simulations, gmx, amber, tuner, notebooks, analysis)
+ROUTERS = (
+    system,
+    experiments,
+    population,
+    publishing,
+    archive,
+    mdrepo,
+    files,
+    simulations,
+    gmx,
+    amber,
+    tuner,
+    notebooks,
+    analysis,
+)
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Validate the catalog, migrate the database, and run the du monitor for the app's lifetime."""
+    """Validate the catalog, migrate the database, and run background monitors for the app's lifetime."""
     start = time.perf_counter()
     du_task: asyncio.Task | None = None
+    population_task: asyncio.Task | None = None
     try:
         # Validate bundled catalog before migrations so a bad catalog fails fast.
         load_catalog_or_exit()
@@ -50,9 +67,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await anyio.to_thread.run_sync(run_migrations, db_path)
         init_engine(db_path)
         du_task = asyncio.create_task(du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS))
+        # Datahugger population completes through this monitor, not through browser polling.
+        population_task = asyncio.create_task(run_population_monitor(app.state.clients))
         logger.info("startup completed in %.3fs", time.perf_counter() - start)
         yield
     finally:
+        if population_task is not None:
+            population_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await population_task
         if du_task is not None:
             du_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

@@ -124,6 +124,12 @@ METADUMP_API_URL: str | None = os.environ.get("METADUMP_API_URL")
 if not METADUMP_API_URL:
     logger.warning("METADUMP_API_URL environment variable is not set. MetaDump metadata extraction will be skipped.")
 
+# The Dashboard API's own image, reused by one-shot Datahugger population worker Jobs.
+API_IMAGE = os.environ.get("API_IMAGE", "")
+
+if not API_IMAGE:
+    logger.warning("API_IMAGE is not set. Datahugger population will not work.")
+
 # MDRepo upload Job image, injected from Helm like other sidecar images.
 MDREPO_UPLOADER_IMAGE = os.environ.get("MDREPO_UPLOADER_IMAGE", "")
 

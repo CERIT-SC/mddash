@@ -129,7 +129,14 @@ paths:
       tags:
       - Experiments
       summary: Create an experiment
-      description: Create a new experiment from PDB, repository URL, or uploaded files.
+      description: 'Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
+
+
+        Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
+
+        one-shot download worker, and returns the operation to follow instead of an
+
+        experiment (the experiment appears only after the download succeeds).'
       operationId: createExperiment
       requestBody:
         content:
@@ -144,6 +151,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Experiment'
+        '202':
+          description: Datahugger population queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PopulationJob'
         '400':
           description: Invalid request
           content:
@@ -249,6 +262,44 @@ paths:
       responses:
         '204':
           description: Operation completed successfully
+        '404':
+          description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          description: RFC 9457 problem details
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /dash/api/experiment-population-jobs/{operation_id}:
+    get:
+      tags:
+      - Population
+      summary: Get a population operation
+      description: 'Read-only status of a Datahugger-NG population operation.
+
+
+        Reconciliation (finalization and failure handling) is owned by the app
+
+        lifespan monitor; this endpoint never mutates state.'
+      operationId: getExperimentPopulationJob
+      parameters:
+      - name: operation_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Population operation status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PopulationOperationStatus'
         '404':
           description: Resource not found
           content:
@@ -2596,6 +2647,7 @@ components:
           - pdb
           - repo
           - file
+          - datahugger
         simulation-files:
           items:
             type: string
@@ -3292,6 +3344,42 @@ components:
       - TERMINATING
       - TERMINATED
       description: Status values for Kubernetes pods.
+    PopulationJob:
+      properties:
+        operation_id:
+          type: string
+        experiment_id:
+          type: string
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - experiment_id
+      description: 'Accepted Datahugger-NG population (202): identifiers for following the operation.'
+    PopulationOperationStatus:
+      properties:
+        operation_id:
+          type: string
+        experiment_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - experiment_id
+      - status
+      description: Read-only status of a Datahugger-NG population operation.
     Problem:
       additionalProperties: false
       description: RFC 9457 problem details. The HTTP status is carried by the response status line.

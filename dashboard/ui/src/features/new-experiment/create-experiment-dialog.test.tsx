@@ -43,6 +43,15 @@ function dialogTab(name: string | RegExp) {
   return within(screen.getByRole("dialog")).getByRole("tab", { name })
 }
 
+/**
+ * The footer dismiss button. The dialog's X is also accessible as "Close" (via an sr-only span),
+ * so match the visible text only.
+ */
+function footerClose() {
+  const visible = screen.getAllByText("Close").filter((el) => !el.classList.contains("sr-only"))
+  return visible[0].closest("button") as HTMLButtonElement
+}
+
 describe("CreateExperimentDialog", () => {
   beforeEach(() => vi.unstubAllGlobals())
 
@@ -186,5 +195,165 @@ describe("CreateExperimentDialog", () => {
     const uploaded = submitted.find(([key]) => key === "simulation-files")?.[1]
     expect(uploaded).toBeInstanceOf(File)
     expect((uploaded as File).name).toBe("topol.tpr")
+  })
+})
+
+const POPULATION_OPERATION_ID = "op0123456789abcdef"
+const POPULATION_EXPERIMENT_ID = "popexp1"
+const ERROR_VALIDATION = "The downloaded repository files failed size or checksum validation."
+
+/** Create answers 202 and the status endpoint serves the given statuses in order (last one sticks). */
+function stubPopulationApi(statuses: { status: string; error?: string | null }[]) {
+  let submitted: [string, FormDataEntryValue][] | null = null
+  let statusCalls = 0
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    if (init?.method === "POST" && init.body instanceof FormData) {
+      submitted = Array.from(init.body.entries())
+      return Response.json(
+        { operation_id: POPULATION_OPERATION_ID, experiment_id: POPULATION_EXPERIMENT_ID },
+        { status: 202 }
+      )
+    }
+    if (url.endsWith(`/dash/api/experiment-population-jobs/${POPULATION_OPERATION_ID}`)) {
+      const entry = statuses[Math.min(statusCalls, statuses.length - 1)]
+      statusCalls += 1
+      return Response.json(
+        { operation_id: POPULATION_OPERATION_ID, experiment_id: POPULATION_EXPERIMENT_ID, ...entry },
+        { status: 200 }
+      )
+    }
+    if (url.includes("notebook-modules")) return Response.json(CATALOG_MODULES)
+    return Response.json([])
+  })
+  return { getSubmitted: () => submitted, statusCalls: () => statusCalls }
+}
+
+describe("CreateExperimentDialog — Datahugger-NG population", () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it(
+    "submits datahugger with 202 and opens the experiment when the population succeeds",
+    { timeout: 15000 },
+    async () => {
+      const api = stubPopulationApi([{ status: "queued" }, { status: "succeeded" }])
+      const user = userEvent.setup()
+      const { router } = await renderPage()
+
+      await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+      await user.type(screen.getByLabelText("Name"), "Datahugger run")
+      await user.click(dialogTab(/datahugger/i))
+      // surrounding whitespace is trimmed before submission
+      await user.type(screen.getByLabelText("Repository URL"), " https://github.com/owner/dataset ")
+      await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+
+      expect(await waitForSubmit(api.getSubmitted)).toEqual(
+        expect.arrayContaining([
+          ["experiment-name", "Datahugger run"],
+          ["type", "datahugger"],
+          ["repo-url", "https://github.com/owner/dataset"],
+          ["notebooks-repo", NOTEBOOKS_REPO],
+          ["engine", "GMX"],
+        ])
+      )
+
+      // the 202 switches the dialog to following the operation: still open, submit disabled
+      expect(await screen.findByText(/downloading the repository/i)).toBeVisible()
+      expect(footerClose()).toBeVisible()
+      expect(screen.getByRole("button", { name: "Create Experiment" })).toBeDisabled()
+
+      // the poll that reports success opens the reserved experiment and closes the dialog
+      await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/experiments/${POPULATION_EXPERIMENT_ID}`), {
+        timeout: 10000,
+      })
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    }
+  )
+
+  it("rejects a missing or non-http repository URL for the datahugger source", async () => {
+    const api = stubPopulationApi([{ status: "queued" }])
+    const user = userEvent.setup()
+    await renderPage()
+
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+    await user.type(screen.getByLabelText("Name"), "Bad URL run")
+    await user.click(dialogTab(/datahugger/i))
+
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    expect(await screen.findByText("Enter a valid http(s) repository URL")).toBeVisible()
+
+    // a git URL is valid for the notebooks repo but not for a public dataset
+    await user.type(screen.getByLabelText("Repository URL"), "git@github.com:owner/dataset.git")
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    expect(await screen.findByText("Enter a valid http(s) repository URL")).toBeVisible()
+
+    expect(api.getSubmitted()).toBeNull()
+  })
+
+  it("shows a durable failure alert and stops polling when the population fails", { timeout: 15000 }, async () => {
+    const api = stubPopulationApi([{ status: "failed", error: ERROR_VALIDATION }])
+    const user = userEvent.setup()
+    const { router } = await renderPage()
+
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+    await user.type(screen.getByLabelText("Name"), "Failing run")
+    await user.click(dialogTab(/datahugger/i))
+    await user.type(screen.getByLabelText("Repository URL"), "https://github.com/owner/dataset")
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    await waitForSubmit(api.getSubmitted)
+
+    // durable inline alert, dialog stays open, submit stays disabled
+    expect(await screen.findByText("Experiment creation failed")).toBeVisible()
+    expect(screen.getByText(ERROR_VALIDATION)).toBeVisible()
+    expect(footerClose()).toBeVisible()
+    expect(screen.getByRole("button", { name: "Create Experiment" })).toBeDisabled()
+
+    // a failed operation is terminal: polling stops while the dialog stays open
+    const calls = api.statusCalls()
+    await new Promise((resolve) => setTimeout(resolve, 3500))
+    expect(api.statusCalls()).toBe(calls)
+    // and nothing navigated to the reserved experiment
+    expect(router.state.location.pathname).not.toBe(`/experiments/${POPULATION_EXPERIMENT_ID}`)
+  })
+
+  it("shows a durable polling error with retry when the status request fails", async () => {
+    let submitted: [string, FormDataEntryValue][] | null = null
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (init?.method === "POST" && init.body instanceof FormData) {
+        submitted = Array.from(init.body.entries())
+        return Response.json(
+          { operation_id: POPULATION_OPERATION_ID, experiment_id: POPULATION_EXPERIMENT_ID },
+          { status: 202 }
+        )
+      }
+      if (url.endsWith(`/dash/api/experiment-population-jobs/${POPULATION_OPERATION_ID}`)) {
+        return Response.json(
+          {
+            type: "urn:mddash:internal-error",
+            title: "Internal Server Error",
+            detail: "Something went wrong",
+            solution: "Retry the action or contact support.",
+          },
+          { status: 500 }
+        )
+      }
+      if (url.includes("notebook-modules")) return Response.json(CATALOG_MODULES)
+      return Response.json([])
+    })
+    const getSubmitted = () => submitted
+    const user = userEvent.setup()
+    await renderPage()
+
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+    await user.type(screen.getByLabelText("Name"), "Polling error run")
+    await user.click(dialogTab(/datahugger/i))
+    await user.type(screen.getByLabelText("Repository URL"), "https://github.com/owner/dataset")
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    await waitForSubmit(getSubmitted)
+
+    expect(await screen.findByText("Internal Server Error")).toBeVisible()
+    expect(screen.getByText("Retry the action or contact support.")).toBeVisible()
+    expect(screen.getByRole("button", { name: "Retry" })).toBeVisible()
   })
 })
