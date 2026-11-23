@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test"
 test("expert configuration: submit an AMBER production run", async ({ page }) => {
   await page.goto("experiments/iiiii?simulation=tetrapeptide")
 
-  await page.getByRole("button", { name: "Expert…" }).click()
+  await page.getByRole("button", { name: "Expert" }).click()
   await page.getByRole("combobox", { name: "Binary" }).click()
   await page.getByRole("option", { name: "pmemd.cuda (GPU)" }).click()
   await page.getByRole("combobox", { name: "Ewald preset" }).click()

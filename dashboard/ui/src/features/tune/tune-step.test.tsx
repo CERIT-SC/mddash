@@ -472,7 +472,7 @@ describe("TuneStep defaults and Expert", () => {
     mockTuner(null)
     const spies = renderTune()
 
-    await userEvent.click(screen.getByRole("button", { name: "Expert…" }))
+    await userEvent.click(screen.getByRole("button", { name: "Expert" }))
     expect(spies.onModeChange).toHaveBeenCalledWith("manual")
   })
 

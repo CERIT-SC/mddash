@@ -330,7 +330,7 @@ export function TuneStep({
           </Button>
         )}
         <Button type="button" variant="outline" onClick={() => onModeChange("manual")}>
-          Expert…
+          Expert
         </Button>
       </div>
 
