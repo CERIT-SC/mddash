@@ -276,6 +276,21 @@ class TestDefaultResources:
         on_disk = json.loads((tmp_path / exp_id / sim_path).read_text())
         assert on_disk["resources"] == GMX_RESOURCES
 
+    async def test_update_drops_invalid_resources(
+        self, db_session: AsyncSession, tmp_path: Path, seed_experiment: SeedExperiment, jobs: JobsService
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(exp_dir, resources={**GMX_RESOURCES, "np": 0})
+
+        sim = Simulation.update(
+            await _experiment(db_session, jobs, exp_id),
+            sim_path,
+            {"name": "protein", "files": GMX_FILES, "extra_args": ""},
+        )
+
+        assert sim.valid
+        assert "resources" not in json.loads((tmp_path / exp_id / sim_path).read_text())
+
     async def test_route_returns_the_defaults(self, client: AsyncClient, seed_experiment: SeedExperiment) -> None:
         exp_id, exp_dir = await seed_experiment()
         write_simulation(exp_dir, resources=GMX_RESOURCES)

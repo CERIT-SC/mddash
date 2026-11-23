@@ -157,6 +157,18 @@ def _build_content(engine: Engine, payload: dict) -> dict:
     }
 
 
+def _valid_resources(engine: Engine, resources: object) -> object:
+    """`resources` when they pass the engine schema, else None, so an edit can repair a manifest with bad ones."""
+    schema = resolve_schema_url(schema_url(engine))
+    if resources is None or schema is None:
+        return None
+    try:
+        jsonschema.validate(resources, schema["properties"]["resources"])
+    except jsonschema.ValidationError:
+        return None
+    return resources
+
+
 def _rebase_files_to_manifest(files: dict, simulation_path: str) -> dict:
     """
     Strip the manifest-directory prefix from experiment-relative role values.
@@ -706,5 +718,5 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             simulation_path,
             payload,
             current_name=current.name,
-            keep_resources=current.resources,
+            keep_resources=_valid_resources(experiment.engine, current.resources),
         )

@@ -82,6 +82,29 @@ const TUNE_REQUIRED_ROLES: Record<Engine, FileRoleKey[]> = {
 const MANUAL_FORM_ID = "tune-manual-config"
 const CUSTOMIZE_FORM_ID = "tune-customize-config"
 
+/** Why the simulation can't be tuned or run yet; empty when it can. */
+function setupBlockers(simulation: Simulation, engine: Engine): string[] {
+  const blockers: string[] = []
+  if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
+  const missingRequired = missingRequiredRoles(simulation, TUNE_REQUIRED_ROLES[engine])
+  if (missingRequired.length > 0) {
+    const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
+    blockers.push(`Missing files: ${labels.join(", ")}.`)
+  }
+  return blockers
+}
+
+function SetupBlockersAlert({ blockers }: { blockers: string[] }) {
+  return (
+    <Alert variant="warning">
+      <AlertTitle>Finish setup first</AlertTitle>
+      <AlertDescription>
+        {blockers.join(" ")} Go back to the Setup step to fix this before tuning or running.
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 /** error_message is NullableString. Treat both null and undefined as absent. */
 const hasErrorMessage = (job: TunerJob) => job.error_message !== null && job.error_message !== undefined
 
@@ -122,6 +145,7 @@ export function TuneStep({
   const [manualValid, setManualValid] = useState(false)
   const [customizeValid, setCustomizeValid] = useState(false)
   const [tuneRequested, setTuneRequested] = useState(false)
+  const [submitError, setSubmitError] = useState<unknown>()
   const defaults = simulation.default_resources ?? null
 
   const jobQuery = useGetTunerJob(experimentId, simulation.simulation_path, {
@@ -205,27 +229,32 @@ export function TuneStep({
 
   // Run Simulation submits the production job and reports the start on success;
   // a failure stays in Configuration with the actionable error.
-  const submitRunNow = (values: HardwareConfigValues) =>
+  // The Expert dialog stays open until the run starts, so a failure keeps the user's values.
+  const submitRunNow = (values: HardwareConfigValues) => {
+    setSubmitError(undefined)
+    const started = () => {
+      if (mode === "manual") onModeChange("tuning")
+      advanceToRun()
+    }
     submitRun.mutate(
       { experimentId, simulationPath: simulation.simulation_path, data: toJobRequest(engine, values) },
       {
         onSuccess: () => {
           setConfirmNewRun(null)
           toast.success("Run started")
-          advanceToRun()
+          started()
         },
         onError: (error) => {
           setConfirmNewRun(null)
-          const apiError = toApiError(error)
-          toast.error(apiError.message)
           // The 409 live-run conflict: the goal is met despite the error; go there.
-          if (apiError.status === 409) advanceToRun()
+          if (toApiError(error).status === 409) started()
+          else setSubmitError(error)
         },
       }
     )
+  }
 
   const startRun = (values: HardwareConfigValues) => {
-    if (mode === "manual") onModeChange("tuning")
     if (priorTerminalRun) setConfirmNewRun(values)
     else submitRunNow(values)
   }
@@ -242,8 +271,12 @@ export function TuneStep({
   }
 
   const picked = pickedRow !== undefined
+  // Once a tuner job has shown the tuning view it stays, so Re-tune lands on Start tuning.
+  if (job !== undefined && !tuneRequested) setTuneRequested(true)
   // Without defaults tuning is the way forward; with them it waits for Tune first or an existing tuner job.
   const showTuning = defaults === null || tuneRequested || job !== undefined
+  const blockers = setupBlockers(simulation, engine)
+  const tunerError = missing || !jobQuery.isError ? undefined : jobQuery.error
 
   // Clear a stale pick: job deleted (404) or trial no longer present. `missing`
   // flips only after a resolved fetch, so a reloaded page never clears mid-load.
@@ -272,9 +305,20 @@ export function TuneStep({
         <p className="text-sm">Suggested by setup: {configSummary(engine, toHardwareValues(defaults))}</p>
       )}
 
+      {/* The tuning view shows these itself; with it hidden they would vanish. */}
+      {!showTuning && blockers.length > 0 && <SetupBlockersAlert blockers={blockers} />}
+      {!showTuning && tunerError !== undefined && (
+        <ApiErrorAlert error={tunerError} onRetry={() => void jobQuery.refetch()} />
+      )}
+      {submitError !== undefined && mode !== "manual" && <ApiErrorAlert error={submitError} />}
+
       <div className="flex flex-wrap gap-2">
         {defaults !== null && (
-          <Button type="button" onClick={() => startRun(toHardwareValues(defaults))} disabled={submitRun.isPending}>
+          <Button
+            type="button"
+            onClick={() => startRun(toHardwareValues(defaults))}
+            disabled={submitRun.isPending || blockers.length > 0}
+          >
             {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
             Start with default
           </Button>
@@ -294,13 +338,13 @@ export function TuneStep({
         <section aria-label="Tuning" className="space-y-6">
           <Separator />
           <TuningBody
-            simulation={simulation}
             job={job}
             live={live}
             tunerSilent={tunerSilent}
             rows={rows}
             pending={jobQuery.isPending}
-            error={missing ? undefined : jobQuery.isError ? jobQuery.error : undefined}
+            error={tunerError}
+            blockers={blockers}
             onRetry={() => void jobQuery.refetch()}
             startPending={start.isPending}
             stopPending={stop.isPending}
@@ -351,6 +395,7 @@ export function TuneStep({
             onSubmit={startRun}
             onValidityChange={setManualValid}
           />
+          {submitError !== undefined && <ApiErrorAlert error={submitError} />}
           <DialogFooter>
             <Button type="submit" form={MANUAL_FORM_ID} disabled={submitRun.isPending || !manualValid}>
               {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
@@ -437,13 +482,13 @@ export function TuneStep({
 }
 
 type TuningBodyProps = {
-  simulation: Simulation
   job: TunerJob | undefined
   live: boolean
   tunerSilent: boolean
   rows: TrialRow[]
   pending: boolean
   error: unknown
+  blockers: string[]
   onRetry: () => void
   startPending: boolean
   stopPending: boolean
@@ -459,13 +504,13 @@ type TuningBodyProps = {
 }
 
 function TuningBody({
-  simulation,
   job,
   live,
   tunerSilent,
   rows,
   pending,
   error,
+  blockers,
   onRetry,
   startPending,
   stopPending,
@@ -493,23 +538,9 @@ function TuningBody({
   }
 
   if (job === undefined) {
-    const blockers: string[] = []
-    if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
-    const missingRequired = missingRequiredRoles(simulation, TUNE_REQUIRED_ROLES[engine])
-    if (missingRequired.length > 0) {
-      const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
-      blockers.push(`Missing files: ${labels.join(", ")}.`)
-    }
     return (
       <div className="space-y-4">
-        {blockers.length > 0 && (
-          <Alert variant="warning">
-            <AlertTitle>Finish setup first</AlertTitle>
-            <AlertDescription>
-              {blockers.join(" ")} Go back to the Setup step to fix this before tuning.
-            </AlertDescription>
-          </Alert>
-        )}
+        {blockers.length > 0 && <SetupBlockersAlert blockers={blockers} />}
         <div className="flex flex-wrap items-end gap-4">
           <NstepsField id="tune-nsteps-idle" value={draftNsteps} onValueChange={onDraftNstepsChange} />
           <Button type="button" onClick={() => onStart(draftNsteps)} disabled={startPending || blockers.length > 0}>

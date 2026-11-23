@@ -450,6 +450,7 @@ describe("TuneStep defaults and Expert", () => {
     const spies = renderTune({
       simulation: simulation(SIM, {
         valid: true,
+        files: { run_input: "prod.tpr", reference_structure: "ref.gro", trajectory: "prod.xtc" },
         default_resources: { np: 2, ntomp: 8, pme: "gpu", nb: "gpu" },
       }),
     })
