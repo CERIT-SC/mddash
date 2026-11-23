@@ -30,8 +30,8 @@ Everything below is per simulation (tab) unless marked experiment-level, so it c
 | Layout | The four steps stack as cards on one page. A toggle under the cards switches between full width and a side column with the notebook and files; each browser remembers the choice. The prototype's other footer variants are out of scope. |
 | Setup | **Run setup** executes the setup notebook headless as a Kubernetes Job. Opening the notebook stays the way to edit or fix it. |
 | Setup progress | Spinner plus "Step k of n · title" and a thin progress bar. n comes from the pipeline tracker's step discovery. |
-| Setup resources | Default notebook size, no GPU. Today's size and GPU selection (`NotebookLauncher`) moves behind **Expert…**. |
-| Run resources | Defaults come from a new optional manifest field `resources`. **Tune first** runs today's tuner. **Expert…** opens today's manual hardware form. |
+| Setup resources | Default notebook size, no GPU. Today's size and GPU selection (`NotebookLauncher`) moves behind **Expert**. |
+| Run resources | Defaults come from a new optional manifest field `resources`. **Tune first** runs today's tuner. **Expert** opens today's manual hardware form. |
 | Analysis, Publish | Content unchanged (#192 and later work). Publish stays experiment-level; its button moves to the title row and opens today's Publish UI in a dialog. |
 | Setup changes after a run | #190 owns this: changing the setup of a running or finished simulation warns and offers to stop the run and delete its results. Keeping them means copying the experiment instead (#163). Until then the manifest lock works as today. |
 
@@ -66,7 +66,7 @@ Experiment level: `step` is the latest simulation's step. Publishing and publish
 
 ## Page layout
 
-- Title row: today's `TitleRow` plus a **Publish…** button, disabled with today's reason until `can_publish`. It opens today's `PublishStep` in a dialog whose open state lives in the URL (`?publish`), so the MDRepo OAuth `return_url` reopens it.
+- Title row: today's `TitleRow` plus a **Publish** button, disabled until `can_publish` with today's reason in a hover tooltip. It opens today's `PublishStep` in a dialog whose open state lives in the URL (`?publish`), so the MDRepo OAuth `return_url` reopens it.
 - `SimulationTabs` stay above the cards.
 - Cards come from one `STEPS` array keyed by `Step` (label, card config). A card is current (the step being worked on, expanded), open (reachable while an earlier card is still current, e.g. Analysis during a live run), done (Setup and Configuration fold to one summary line with a Show toggle; Simulation and Analysis stay expanded) or locked (dashed, lock icon, reason such as "Available once the setup finishes").
 - Simulation hosts today's `RunStep` content and Analysis today's `AnalyzeStep`, minus their Back/Next buttons.
@@ -105,7 +105,7 @@ A segmented control under the cards (the prototype's footer) switches between tw
 
 | State | Shows | Actions |
 |---|---|---|
-| Not run | "Prepares the system with the workflow's defaults." | **Run setup**, Edit in notebook, Expert… (size, GPU) |
+| Not run | "Prepares the system with the workflow's defaults." | **Run setup**, Edit in notebook, Expert (size, GPU) |
 | Starting | Spinner, "Starting setup", or "Waiting for resources" while unschedulable | View notebook, Stop |
 | Running | Spinner, "Step 6 of 11 · Solvate", progress bar | View notebook, Stop |
 | Failed | Alert "Setup stopped at step 4 of 11 · Parse the input" with the notebook's own error message | Fix in notebook, Show log, Run setup |
@@ -165,7 +165,7 @@ The pipeline-tracker Python package ships `mddash-run-notebook <notebook> --stat
 - Actions:
   - **Start with default**, primary when defaults exist, submits the run with them. Today's re-run confirmation still applies.
   - **Tune first**, primary when there are no defaults, shows today's tuning view inline (step count, trials table, customise, start).
-  - **Expert…** opens today's `HardwareConfigForm` in a dialog.
+  - **Expert** opens today's `HardwareConfigForm` in a dialog.
 - Done: one line with the configuration used (ranks × threads, GPU offload).
 
 ## Errors

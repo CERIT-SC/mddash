@@ -94,8 +94,11 @@ describe("ExperimentWizard step cards", () => {
 describe("ExperimentWizard publish", () => {
   it("keeps Publish disabled with the reason until something is publishable", async () => {
     await renderWizard()
-    expect(await screen.findByRole("button", { name: "Publish…" })).toBeDisabled()
-    expect(screen.getByText("Publish unlocks once a run has finished or been stopped.")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Publish" })).toBeDisabled()
+    await userEvent.hover(screen.getByLabelText(/^Publish: /))
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Publish unlocks once a run has finished or been stopped."
+    )
   })
 
   it("opens the Publish dialog through the URL", async () => {
@@ -104,7 +107,7 @@ describe("ExperimentWizard publish", () => {
       sims: [simulation(SIM, { name: "protein", valid: true, step: Step.analysis, status: "analyzing" })],
       exp: { can_publish: true },
     })
-    await user.click(await screen.findByRole("button", { name: "Publish…" }))
+    await user.click(await screen.findByRole("button", { name: "Publish" }))
     expect(view.onSearchChange).toHaveBeenCalledWith(expect.objectContaining({ publish: true }))
   })
 

@@ -7,7 +7,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Muted,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@e-infra/design-system"
 import { Upload } from "lucide-react"
 
@@ -32,12 +34,26 @@ export function PublishAction({
   onOAuthHandled,
 }: PublishActionProps) {
   return (
-    <div className="flex flex-col items-start gap-1 sm:items-end">
-      <Button type="button" disabled={reason !== undefined} onClick={() => onOpenChange(true)}>
-        <Upload aria-hidden="true" />
-        Publish…
-      </Button>
-      {reason !== undefined && <Muted className="max-w-72 sm:text-right">{reason}</Muted>}
+    <>
+      {reason === undefined ? (
+        <Button type="button" onClick={() => onOpenChange(true)}>
+          <Upload aria-hidden="true" />
+          Publish
+        </Button>
+      ) : (
+        <Tooltip>
+          {/* A disabled button gets no pointer events, so the focusable wrapper carries the hover. */}
+          <TooltipTrigger asChild>
+            <span tabIndex={0} aria-label={`Publish: ${reason}`} className="inline-flex">
+              <Button type="button" disabled>
+                <Upload aria-hidden="true" />
+                Publish
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{reason}</TooltipContent>
+        </Tooltip>
+      )}
       {simulation !== undefined && (
         <Dialog open={open && reason === undefined} onOpenChange={onOpenChange}>
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
@@ -56,6 +72,6 @@ export function PublishAction({
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </>
   )
 }
