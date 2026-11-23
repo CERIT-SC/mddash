@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react"
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
 import { Step, type Experiment, type Simulation } from "@/api/generated/models"
@@ -29,6 +29,18 @@ const CARDS: Record<Step, { lockedReason?: string; foldWhenDone: boolean }> = {
 }
 
 const stepCardId = (step: Step) => `step-${step}`
+
+/** Analysis lock note once a settled run left Simulation current without frames. */
+const NO_FRAMES_REASON = "Re-run the simulation to produce frames"
+
+/** Mounts with its card's content, i.e. once the card unlocks, so the scroll lands after the ladder's layout shift. */
+function ScrollIntoViewOnMount({ targetId, onDone }: { targetId: string; onDone: () => void }) {
+  useEffect(() => {
+    document.getElementById(targetId)?.scrollIntoView?.()
+    onDone()
+  }, [targetId, onDone])
+  return null
+}
 
 /** The ladder reports the furthest step; a live run stays current after its frames open Analysis. */
 function cardStates(simulation: Simulation | undefined): Record<Step, StepCardState> {
@@ -101,6 +113,9 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   // once on the live→settled transition so the Publish unlock lands.
   const anyLive = simulations.data?.status === 200 && simulations.data.data.some((simulation) => simulation.live)
   const wasLive = useRef(false)
+  // The simulation tab whose run just started; its Simulation card scrolls into view once it unlocks.
+  const [runStartedTab, setRunStartedTab] = useState<string>()
+  const clearRunStarted = useCallback(() => setRunStartedTab(undefined), [])
   const refetchExperiment = experiment.refetch
   useEffect(() => {
     if (wasLive.current && !anyLive) void refetchExperiment()
@@ -216,11 +231,18 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             onModeChange={(mode) =>
               updateSearch({ simulation: simTab, mode: mode === "manual" ? "manual" : undefined })
             }
-            onRunStarted={() => document.getElementById(stepCardId(Step.simulation))?.scrollIntoView?.()}
+            onRunStarted={() => setRunStartedTab(simTab)}
           />
         )
       case Step.simulation:
-        return <RunStep experimentId={experimentId} engine={data.engine} simulation={selected} />
+        return (
+          <>
+            {runStartedTab === simTab && (
+              <ScrollIntoViewOnMount targetId={stepCardId(Step.simulation)} onDone={clearRunStarted} />
+            )}
+            <RunStep experimentId={experimentId} engine={data.engine} simulation={selected} />
+          </>
+        )
       case Step.analysis:
         return (
           <AnalyzeStep
@@ -237,6 +259,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         )
     }
   }
+
+  const lockedNote = (step: Step): string | undefined =>
+    step === Step.analysis && states.simulation === "current" && selected?.live !== true
+      ? NO_FRAMES_REASON
+      : CARDS[step].lockedReason
 
   const doneNote = (step: Step): string | undefined => {
     if (step === Step.setup && selected !== undefined) return `“${selected.name}” is ready`
@@ -296,11 +323,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                   title={STEP_LABELS[step]}
                   state={states[step]}
                   note={
-                    states[step] === "locked"
-                      ? CARDS[step].lockedReason
-                      : states[step] === "done"
-                        ? doneNote(step)
-                        : undefined
+                    states[step] === "locked" ? lockedNote(step) : states[step] === "done" ? doneNote(step) : undefined
                   }
                   foldWhenDone={CARDS[step].foldWhenDone}
                 >

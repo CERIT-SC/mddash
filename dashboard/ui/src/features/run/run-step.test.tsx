@@ -396,11 +396,11 @@ describe("RunStep extend flow", () => {
 })
 
 describe("RunStep without a job", () => {
-  it("says no run is in progress", async () => {
+  it("points to Configuration when no run exists", async () => {
     mockRun({ initial: null })
     renderRun()
 
-    expect(await screen.findByText("No run in progress.")).toBeInTheDocument()
+    expect(await screen.findByText("No run found. Open Configuration above to start one.")).toBeInTheDocument()
   })
 })
 

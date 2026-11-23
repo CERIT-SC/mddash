@@ -217,11 +217,12 @@ const STEP_DETAILS: Record<Step, (props: DetailsProps) => React.ReactNode> = {
 }
 
 function StepDetails({ experiment, step }: { experiment: Experiment; step: Step }) {
-  // A draft or a published record (mdrepo_published set) is the API's publish override.
-  const Details = typeof experiment.mdrepo_published === "boolean" ? PublishDetails : STEP_DETAILS[step]
+  const Details = STEP_DETAILS[step]
   return (
     <dl className="border-border space-y-2 border-t pt-4">
       <Details experiment={experiment} />
+      {/* A draft or a published record (mdrepo_published set) adds to the step's rows, matching its label. */}
+      {typeof experiment.mdrepo_published === "boolean" && <PublishDetails experiment={experiment} />}
     </dl>
   )
 }

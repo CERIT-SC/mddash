@@ -127,10 +127,15 @@ export function RunStep({ experimentId, engine, simulation, pollMs = RUN_POLL_MS
 
   // A gone job (deleted here or elsewhere) leaves nothing to show. Refetching the
   // ladder moves the cards back to Configuration, where the run lifecycle restarts.
+  // Keep refetching while it is gone: one refetch can race a stale list.
   const missing = jobQuery.missing
   useEffect(() => {
-    if (missing) void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
-  }, [missing, queryClient, experimentId])
+    if (!missing) return
+    const refetchList = () => void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
+    refetchList()
+    const timer = setInterval(refetchList, pollMs)
+    return () => clearInterval(timer)
+  }, [missing, queryClient, experimentId, pollMs])
 
   return (
     <div className="space-y-6">
@@ -147,7 +152,7 @@ export function RunStep({ experimentId, engine, simulation, pollMs = RUN_POLL_MS
       ) : jobQuery.error !== undefined ? (
         <ApiErrorAlert error={jobQuery.error} onRetry={jobQuery.retry} />
       ) : job === undefined ? (
-        <p className="text-text-muted text-sm">No run in progress.</p>
+        <p className="text-text-muted text-sm">No run found. Open Configuration above to start one.</p>
       ) : (
         <div className="space-y-6">
           <ConfigUsed engine={engine} job={job} trials={trials} />
