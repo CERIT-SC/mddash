@@ -33,6 +33,7 @@ def write_simulation(
     name: str = "protein",
     extra_args: str = "",
     inputs: tuple[str, ...] = (),
+    resources: dict | None = None,
 ) -> str:
     """Write a manifest (files default per engine) and a placeholder file for each role in `inputs`; returns its path."""
     files = files if files is not None else (GMX_FILES if engine is Engine.GMX else AMBER_FILES)
@@ -45,6 +46,8 @@ def write_simulation(
         "files": files,
         "extra_args": extra_args,
     }
+    if resources is not None:
+        content["resources"] = resources
     manifest.write_text(json.dumps(content))
     for role in inputs:
         path = manifest.parent / files[role]

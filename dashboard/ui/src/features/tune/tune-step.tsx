@@ -41,22 +41,24 @@ import {
   AlertTitle,
   Button,
   buttonVariants,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Label,
   Separator,
   Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { Clock, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
+import { Clock, Gauge, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { CustomizeConfigSection } from "./customize-config"
 import { HardwareConfigForm, type HardwareConfigValues } from "./hardware-config-form"
 import { DEFAULT_NSTEPS, NstepsSelect } from "./nsteps-select"
-import { toJobRequest } from "./run-request"
+import { configSummary, toHardwareValues, toJobRequest } from "./run-request"
 import { TrialLogDialog } from "./trial-log-dialog"
 import { TrialsTable } from "./trials-table"
 import { parseTrials, type TrialRow } from "./tuned-trials"
@@ -76,7 +78,7 @@ const TUNE_REQUIRED_ROLES: Record<Engine, FileRoleKey[]> = {
   [Engine.GMX]: ["run_input"],
   [Engine.AMBER]: ["topology", "coordinates", "control"],
 }
-// The footer submits whichever hardware form is active by native form id.
+// Run buttons submit their hardware form by native form id.
 const MANUAL_FORM_ID = "tune-manual-config"
 const CUSTOMIZE_FORM_ID = "tune-customize-config"
 
@@ -89,7 +91,7 @@ type TuneStepProps = {
   simulation: Simulation
   /** URL-owned picked trial. */
   trialId: string | undefined
-  /** URL-owned tab view. */
+  /** URL-owned; "manual" means the Expert dialog is open. */
   mode: TuneMode
   onTrialIdChange: (trial: string | undefined) => void
   onModeChange: (mode: TuneMode) => void
@@ -99,7 +101,7 @@ type TuneStepProps = {
   pollMs?: number
 }
 
-/** Configuration step: tune hardware configs (or enter one manually) and pick what the run uses. */
+/** Configuration step: start with the setup's default resources, tune first, or enter a config in Expert. */
 export function TuneStep({
   experimentId,
   engine,
@@ -117,8 +119,10 @@ export function TuneStep({
   const [confirmRetune, setConfirmRetune] = useState(false)
   const [confirmStartNsteps, setConfirmStartNsteps] = useState<number | null>(null)
   const [confirmNewRun, setConfirmNewRun] = useState<HardwareConfigValues | null>(null)
-  // The manual and customize forms never co-mount (separate tabs), so one flag suffices.
-  const [formValid, setFormValid] = useState(false)
+  const [manualValid, setManualValid] = useState(false)
+  const [customizeValid, setCustomizeValid] = useState(false)
+  const [tuneRequested, setTuneRequested] = useState(false)
+  const defaults = simulation.default_resources ?? null
 
   const jobQuery = useGetTunerJob(experimentId, simulation.simulation_path, {
     query: {
@@ -221,6 +225,7 @@ export function TuneStep({
     )
 
   const startRun = (values: HardwareConfigValues) => {
+    if (mode === "manual") onModeChange("tuning")
     if (priorTerminalRun) setConfirmNewRun(values)
     else submitRunNow(values)
   }
@@ -237,6 +242,8 @@ export function TuneStep({
   }
 
   const picked = pickedRow !== undefined
+  // Without defaults tuning is the way forward; with them it waits for Tune first or an existing tuner job.
+  const showTuning = defaults === null || tuneRequested || job !== undefined
 
   // Clear a stale pick: job deleted (404) or trial no longer present. `missing`
   // flips only after a resolved fetch, so a reloaded page never clears mid-load.
@@ -261,13 +268,31 @@ export function TuneStep({
         Tuning runs your simulation briefly across different hardware settings to find the fastest one.
       </p>
 
-      <Tabs value={mode} onValueChange={(next) => onModeChange(next as TuneMode)}>
-        <TabsList aria-label="Configuration method">
-          <TabsTrigger value="tuning">Tuning</TabsTrigger>
-          <TabsTrigger value="manual">Manual configuration</TabsTrigger>
-        </TabsList>
+      {defaults !== null && (
+        <p className="text-sm">Suggested by setup: {configSummary(engine, toHardwareValues(defaults))}</p>
+      )}
 
-        <TabsContent value="tuning" className="space-y-6 pt-4">
+      <div className="flex flex-wrap gap-2">
+        {defaults !== null && (
+          <Button type="button" onClick={() => startRun(toHardwareValues(defaults))} disabled={submitRun.isPending}>
+            {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+            Start with default
+          </Button>
+        )}
+        {!showTuning && (
+          <Button type="button" variant="outline" onClick={() => setTuneRequested(true)}>
+            <Gauge aria-hidden />
+            Tune first
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={() => onModeChange("manual")}>
+          Expert…
+        </Button>
+      </div>
+
+      {showTuning && (
+        <section aria-label="Tuning" className="space-y-6">
+          <Separator />
           <TuningBody
             simulation={simulation}
             job={job}
@@ -290,43 +315,50 @@ export function TuneStep({
             engine={engine}
           />
           {pickedRow !== undefined && (
-            <CustomizeConfigSection
-              engine={engine}
-              row={pickedRow}
-              formId={CUSTOMIZE_FORM_ID}
-              onSubmit={startRun}
-              onValidityChange={setFormValid}
-            />
+            <>
+              <CustomizeConfigSection
+                engine={engine}
+                row={pickedRow}
+                formId={CUSTOMIZE_FORM_ID}
+                onSubmit={startRun}
+                onValidityChange={setCustomizeValid}
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  form={CUSTOMIZE_FORM_ID}
+                  disabled={submitRun.isPending || !(picked && customizeValid)}
+                >
+                  {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+                  Run Simulation
+                </Button>
+              </div>
+            </>
           )}
-        </TabsContent>
+        </section>
+      )}
 
-        <TabsContent value="manual" className="space-y-6 pt-4">
-          <div className="space-y-5">
-            <p className="text-text-muted text-xs font-semibold tracking-wide uppercase">Enter custom configuration</p>
-            <HardwareConfigForm
-              engine={engine}
-              formId={MANUAL_FORM_ID}
-              onSubmit={startRun}
-              onValidityChange={setFormValid}
-            />
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <Separator />
-
-      <div className="flex items-center justify-end gap-2">
-        {/* One submit button for whichever hardware form is active; validity
-            (and, in tuning mode, a real pick) gates the submit. */}
-        <Button
-          type="submit"
-          form={mode === "manual" ? MANUAL_FORM_ID : CUSTOMIZE_FORM_ID}
-          disabled={submitRun.isPending || (mode === "manual" ? !formValid : !(picked && formValid))}
-        >
-          {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
-          Run Simulation
-        </Button>
-      </div>
+      <Dialog open={mode === "manual"} onOpenChange={(open) => onModeChange(open ? "manual" : "tuning")}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Expert configuration</DialogTitle>
+            <DialogDescription>Set the run's hardware configuration yourself.</DialogDescription>
+          </DialogHeader>
+          <HardwareConfigForm
+            engine={engine}
+            initial={defaults === null ? undefined : toHardwareValues(defaults)}
+            formId={MANUAL_FORM_ID}
+            onSubmit={startRun}
+            onValidityChange={setManualValid}
+          />
+          <DialogFooter>
+            <Button type="submit" form={MANUAL_FORM_ID} disabled={submitRun.isPending || !manualValid}>
+              {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+              Run Simulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           until https://github.com/CERIT-SC/design-system/pull/108 lands. */}

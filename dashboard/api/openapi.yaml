@@ -3731,6 +3731,11 @@ components:
           $ref: '#/components/schemas/SimulationFiles'
         extra_args:
           type: string
+        default_resources:
+          anyOf:
+          - $ref: '#/components/schemas/GromacsJobRequest'
+          - $ref: '#/components/schemas/AmberJobRequest'
+          - type: 'null'
         locked:
           type: boolean
         valid:
@@ -3760,6 +3765,7 @@ components:
       - files
       - resolved_files
       - extra_args
+      - default_resources
       - locked
       - valid
       - errors

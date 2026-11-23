@@ -256,6 +256,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return f if isinstance(f, dict) else {}
 
     @property
+    def resources(self) -> object:
+        """Raw `resources` from the manifest, unvalidated."""
+        return self._raw.get("resources")
+
+    @property
+    def default_resources(self) -> dict | None:
+        """Run resources the manifest suggests; None unless present and the manifest is valid."""
+        resources = self.resources
+        return resources if isinstance(resources, dict) and self.valid else None
+
+    @property
     def resolved_files(self) -> dict[str, str]:
         """Experiment-relative paths for each role (manifests write roles relative to the manifest file)."""
         if self._resolved is None:
@@ -621,10 +632,18 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @classmethod
     def _save(
-        cls, experiment: "Experiment", simulation_path: str, payload: dict, *, current_name: str | None = None
+        cls,
+        experiment: "Experiment",
+        simulation_path: str,
+        payload: dict,
+        *,
+        current_name: str | None = None,
+        keep_resources: object = None,
     ) -> "Simulation":
         """Validate `payload` as the manifest content and write it (paths rebased to manifest-relative)."""
         content = _build_content(experiment.engine, payload)
+        if keep_resources is not None:
+            content["resources"] = keep_resources
         content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment.id, str(content.get("name", "")), current_name=current_name)
@@ -681,4 +700,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 "This simulation is in use by a running job; stop the job before editing it.",
             )
 
-        return cls._save(experiment, simulation_path, payload, current_name=current.name)
+        # Resources come from the setup notebook, not the edit form, so an edit keeps them.
+        return cls._save(
+            experiment,
+            simulation_path,
+            payload,
+            current_name=current.name,
+            keep_resources=current.resources,
+        )

@@ -8,6 +8,7 @@ export function simulation(path: string, overrides: Partial<Simulation> = {}): S
     files: {},
     resolved_files: {},
     extra_args: "",
+    default_resources: null,
     locked: false,
     valid: false,
     errors: [],

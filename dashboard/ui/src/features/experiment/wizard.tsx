@@ -13,6 +13,7 @@ import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Card, CardContent, Skeleton } from "@e-infra/design-system"
 
 import { ArchivedNotice } from "./archived-notice"
+import { ConfigurationDoneNote } from "./configuration-done-note"
 import { PopulationPage } from "./population-page"
 import { PublishAction } from "./publish-action"
 import { RenamedFilesNotice } from "./renamed-files-notice"
@@ -265,9 +266,10 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
       ? NO_FRAMES_REASON
       : CARDS[step].lockedReason
 
-  const doneNote = (step: Step): string | undefined => {
+  const doneNote = (step: Step): ReactNode => {
     if (step === Step.setup && selected !== undefined) return `“${selected.name}” is ready`
-    if (step === Step.configuration) return "Run configuration chosen"
+    if (step === Step.configuration && selected !== undefined)
+      return <ConfigurationDoneNote experimentId={experimentId} engine={data.engine} simulation={selected} />
     return undefined
   }
 

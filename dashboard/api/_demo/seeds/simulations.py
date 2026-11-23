@@ -65,7 +65,13 @@ def seed_files() -> None:
 
 def seed_manifests() -> None:
     """Write the simulation manifests."""
-    write_gmx_simulation(MEMBRANE, "gpcr_membrane", topology="gpcr_membrane.tpr")
+    # Setup suggested run resources, so Configuration offers Start with default next to tuning.
+    write_gmx_simulation(
+        MEMBRANE,
+        "gpcr_membrane",
+        topology="gpcr_membrane.tpr",
+        resources={"np": 2, "ntomp": 8, "pme": "gpu", "nb": "gpu"},
+    )
 
     # The tuner/running-job-linked "md" simulation must be the experiment's most recent
     # activity; the placeholder manifests are back-dated so they never win the ladder.
@@ -131,6 +137,17 @@ def seed_manifests() -> None:
             coordinates="tetrapeptide.inpcrd",
             control="production.mdin",
         )
+        # Same inputs with setup-suggested resources: the start-with-default journey owns it.
+        write_amber_simulation(
+            E2E_AMBER_TETRA,
+            "tetrapeptide_default",
+            simulation_path="tetrapeptide_default.simulation.json",
+            topology="tetrapeptide.prmtop",
+            coordinates="tetrapeptide.inpcrd",
+            control="production.mdin",
+            resources={"binary": "pmemd.cuda", "ewald": "optimized", "np": 1, "ntomp": 2},
+        )
+        _backdate(E2E_AMBER_TETRA, ("tetrapeptide_default",))
 
 
 def _backdate(experiment_id: str, stems: tuple[str, ...]) -> None:
