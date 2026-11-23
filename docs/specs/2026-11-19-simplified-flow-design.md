@@ -1,7 +1,7 @@
 # Simplified flow, design
 
 Date is 2026-11-19.
-Status is Draft (brainstorming), pending review.
+Status is Approved.
 Scope is Dashboard API (`dashboard/api`), Dashboard UI (`dashboard/ui`) and the notebook image (`notebook/`).
 Issue is #191. The prototype is https://vaclavklem.github.io/mddash-prototype/.
 
@@ -11,7 +11,7 @@ Users run setup from MDDash without opening the notebook, watch its progress, st
 
 ## Terminology
 
-#190 renames the hierarchy. This spec uses today's code names:
+#190 (approved) aligns the hierarchy with BioSim CZ and renames it. This spec uses today's code names:
 
 | Today (code, UI) | After #190 | Meaning |
 |---|---|---|
@@ -33,7 +33,7 @@ Everything below is per simulation (tab) unless marked experiment-level, so it c
 | Setup resources | Default notebook size, no GPU. Today's size and GPU selection (`NotebookLauncher`) moves behind **Expert…**. |
 | Run resources | Defaults come from a new optional manifest field `resources`. **Tune first** runs today's tuner. **Expert…** opens today's manual hardware form. |
 | Analysis, Publish | Content unchanged (#192 and later work). Publish stays experiment-level; its button moves to the title row and opens today's Publish UI in a dialog. |
-| Setup changes after a run | #190 owns this: a lock, then **Edit setup** warns, stops the run, deletes results and unlocks. Until then the manifest lock works as today. |
+| Setup changes after a run | #190 owns this: changing the setup of a running or finished simulation warns and offers to stop the run and delete its results. Keeping them means copying the experiment instead (#163). Until then the manifest lock works as today. |
 
 ## Current state
 
