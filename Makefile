@@ -120,7 +120,7 @@ type-check-hub-ui: ## Type-check hub UI (TypeScript)
 # Test
 
 .PHONY: test
-test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
+test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api test-tuner test-pre-spawn-hook test-pipeline-tracker ## Run all tests
 
 .PHONY: test-dashboard-ui
 test-dashboard-ui: ## Run Dashboard UI tests
@@ -146,6 +146,13 @@ test-mdrun-api: ## Run mdrun-api tests
 .PHONY: test-tuner
 test-tuner: ## Run Tuner API tests
 	cd tuner && uv run pytest
+
+.PHONY: test-pipeline-tracker
+# Not a workspace member (it ships in the notebook image); pins mirror the image's nbclient/nbformat/ipykernel.
+test-pipeline-tracker: ## Run the notebook executor and step discovery tests
+	cd notebook/jupyterlab-pipeline-tracker && uv run --no-project --python 3.13 \
+		--with pytest==9.1.1 --with nbclient==0.11.0 --with nbformat==5.11.1 --with ipykernel==7.3.0 \
+		python -m pytest -q tests
 
 .PHONY: test-pre-spawn-hook
 test-pre-spawn-hook: ## Run pre-spawn hook unit tests

@@ -80,6 +80,7 @@ function renderSetup(props: Partial<React.ComponentProps<typeof SetupStep>> = {}
         experiment={experiment("exp1")}
         simulation={undefined}
         creating
+        hasSimulations={false}
         source="notebook"
         onOpenSimulation={spies.onOpenSimulation}
         onSourceChange={spies.onSourceChange}

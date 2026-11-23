@@ -123,6 +123,18 @@ FIXTURE_BY_SUFFIX = {
 }
 
 
+def write_setup_notebook(experiment_id: str, extra_source: str = "") -> None:
+    """Write a minimal root `setup.ipynb`, so the setup card offers Run setup."""
+    cells = [
+        {"cell_type": "markdown", "metadata": {}, "source": "## Build the system"},
+        {"cell_type": "code", "metadata": {}, "execution_count": None, "outputs": [], "source": extra_source or "pass"},
+    ]
+    notebook = {"cells": cells, "metadata": {}, "nbformat": 4, "nbformat_minor": 5}
+    path = DATA_DIR / experiment_id / "setup.ipynb"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(notebook, indent=1), encoding="utf-8")
+
+
 def ensure_demo_files(experiment_id: str, filenames: list[str]) -> None:
     experiment_dir = DATA_DIR / experiment_id
     experiment_dir.mkdir(parents=True, exist_ok=True)

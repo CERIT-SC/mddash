@@ -2,14 +2,16 @@ import { useEffect, useRef } from "react"
 
 import { useListExperimentFiles, useListSimulations } from "@/api/generated/client"
 import type { Experiment, Simulation } from "@/api/generated/models"
-import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
+import { NotebookLauncher, notebookRoleUrl, pickNotebookFile, useNotebook, useNotebookReady } from "@/features/notebook"
 import { SimulationForm } from "@/features/simulation"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { toast } from "sonner"
 
 import { SetupGuide } from "./setup-guide"
+import { SetupRunPanel } from "./setup-run"
 
-export type SetupSource = "notebook" | "manual"
+/** "run" is the headless setup run; workflows without a setup notebook fall back to "notebook". */
+export type SetupSource = "run" | "notebook" | "manual"
 
 /** Heartbeat while the setup step is mounted. The manifest can appear mid-wait. */
 const SIMULATIONS_POLL_MS = 5000
@@ -19,6 +21,8 @@ type SetupStepProps = {
   experiment: Experiment
   simulation: Simulation | undefined
   creating: boolean
+  /** Whether the experiment already has a simulation (the create tab shows none). */
+  hasSimulations: boolean
   /** URL-owned source view (survives the route remount on navigation). */
   source: SetupSource
   onSourceChange: (source: SetupSource) => void
@@ -30,6 +34,7 @@ export function SetupStep({
   experiment,
   simulation,
   creating,
+  hasSimulations,
   source,
   onSourceChange,
   onOpenSimulation,
@@ -45,21 +50,30 @@ export function SetupStep({
   const notebookFilesQuery = useListExperimentFiles(experimentId, { ext: "ipynb" }, { query: { retry: false } })
   const notebookFiles = notebookFilesQuery.data?.status === 200 ? notebookFilesQuery.data.data : []
   const openHref = notebookRoleUrl("setup", notebookFiles, notebook) ?? ""
+  const setupNotebook = pickNotebookFile("setup", notebookFiles)
+  const view: SetupSource = source === "run" && setupNotebook === undefined ? "notebook" : source
+  // One notebook feeds every simulation until #190's per-experiment copies, so a run rewrites its last manifest.
+  const runBlocked =
+    creating && hasSimulations
+      ? "Another simulation needs a parameter change in the notebook, so run it there."
+      : simulation?.locked
+        ? "A run uses this simulation's files; setup can run again once it is gone."
+        : undefined
 
   // A pipeline run in create mode produces a brand-new tab; adopt it as soon as
   // it surfaces (guarded to the guided tab so a Manual draft is never yanked away).
   const knownPaths = useRef<Set<string> | null>(null)
   useEffect(() => {
-    if (polled === undefined || !creating || source !== "notebook") return
+    if (polled === undefined || !creating || view === "manual") return
     knownPaths.current ??= new Set(polled.map((entry) => entry.simulation_path))
     const fresh = polled.find((entry) => !knownPaths.current!.has(entry.simulation_path))
     if (fresh) {
       // Record before adopting so a pre-navigation re-fire can't adopt twice.
       knownPaths.current!.add(fresh.simulation_path)
-      toast.success(`Simulation “${fresh.name}” created by the pipeline`)
+      toast.success(`Simulation “${fresh.name}” created by setup`)
       onOpenSimulation(fresh.simulation_path)
     }
-  }, [polled, creating, source, onOpenSimulation])
+  }, [polled, creating, view, onOpenSimulation])
 
   const handleSaved = (saved: Simulation, created: boolean) => created && onOpenSimulation(saved.simulation_path)
 
@@ -70,11 +84,23 @@ export function SetupStep({
         required to continue.
       </p>
 
-      <Tabs value={source} onValueChange={(value) => onSourceChange(value as SetupSource)}>
+      <Tabs value={view} onValueChange={(value) => onSourceChange(value as SetupSource)}>
         <TabsList aria-label="Setup source">
-          <TabsTrigger value="notebook">From Notebook</TabsTrigger>
+          {setupNotebook !== undefined && <TabsTrigger value="run">Run setup</TabsTrigger>}
+          <TabsTrigger value="notebook">{setupNotebook !== undefined ? "In notebook" : "From Notebook"}</TabsTrigger>
           <TabsTrigger value="manual">Manual</TabsTrigger>
         </TabsList>
+
+        {setupNotebook !== undefined && (
+          <TabsContent value="run" className="space-y-6 pt-4">
+            <SetupRunPanel
+              experimentId={experimentId}
+              notebook={setupNotebook.path}
+              blockedReason={runBlocked}
+              onOpenNotebook={() => onSourceChange("notebook")}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="notebook" className="space-y-6 pt-4">
           <SetupGuide

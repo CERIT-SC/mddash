@@ -1008,6 +1008,153 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+  /dash/api/experiments/{experiment_id}/setup:
+    post:
+      tags:
+      - Setup
+      summary: Run setup
+      description: Execute the setup notebook headless in a Kubernetes Job.
+      operationId: startSetup
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSetupRequest'
+      responses:
+        '202':
+          description: Setup run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupRun'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          description: Operation forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          description: RFC 9457 problem details
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    get:
+      tags:
+      - Setup
+      summary: Get the setup run
+      description: Get the notebook's setup run (404 when setup never ran).
+      operationId: getSetup
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: notebook
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          description: Experiment-relative notebook
+          default: setup.ipynb
+        description: Experiment-relative notebook
+      responses:
+        '200':
+          description: Setup run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetupRun'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          description: RFC 9457 problem details
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      tags:
+      - Setup
+      summary: Stop the setup run
+      description: Stop the run in progress.
+      operationId: stopSetup
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      - name: notebook
+        in: query
+        required: false
+        schema:
+          type: string
+          minLength: 1
+          description: Experiment-relative notebook
+          default: setup.ipynb
+        description: Experiment-relative notebook
+      responses:
+        '204':
+          description: Successful Response
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '404':
+          description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          description: RFC 9457 problem details
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /dash/api/experiments/{experiment_id}/gmx:
     get:
       tags:
@@ -3717,6 +3864,83 @@ components:
       - total_bytes
       - completed_bytes
       description: Durable MDRepo upload status merged with live Job state.
+    SetupRun:
+      properties:
+        notebook:
+          type: string
+        state:
+          $ref: '#/components/schemas/SetupState'
+        waiting:
+          type: boolean
+          description: Starting, but the pod can't be scheduled yet
+          default: false
+        step:
+          type: integer
+          description: 1-based step in progress or reached; 0 before the first
+          default: 0
+        total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+        error:
+          anyOf:
+          - $ref: '#/components/schemas/SetupRunError'
+          - type: 'null'
+        manifests:
+          items:
+            type: string
+          type: array
+          description: Experiment-relative manifests the run wrote
+          default: []
+        started_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+        finished_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+      type: object
+      required:
+      - notebook
+      - state
+      description: A headless setup run, reconciled from its Kubernetes Job and the executor's status doc.
+    SetupRunError:
+      properties:
+        step:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          description: 1-based step the run stopped at
+        title:
+          anyOf:
+          - type: string
+          - type: 'null'
+        message:
+          type: string
+        solution:
+          anyOf:
+          - type: string
+          - type: 'null'
+      type: object
+      required:
+      - message
+      description: 'Why a setup run failed: the notebook''s own error, or a friendly infrastructure message.'
+    SetupState:
+      type: string
+      enum:
+      - starting
+      - running
+      - done
+      - stopped
+      - failed
+      description: Lifecycle of a headless setup run.
     Simulation:
       properties:
         simulation_path:
@@ -3908,6 +4132,27 @@ components:
       additionalProperties: false
       type: object
       description: Notebook start options.
+    StartSetupRequest:
+      properties:
+        notebook:
+          type: string
+          minLength: 1
+          description: Experiment-relative notebook
+          default: setup.ipynb
+        tier:
+          anyOf:
+          - type: string
+            enum:
+            - 1x
+            - 2x
+            - 4x
+          - type: 'null'
+        gpu:
+          type: boolean
+          default: false
+      additionalProperties: false
+      type: object
+      description: Setup run options.
     StatisticalData:
       properties:
         average:

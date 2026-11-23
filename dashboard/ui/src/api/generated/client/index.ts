@@ -47,6 +47,7 @@ import type {
   GetAnalysisJobLogsParams,
   GetAnalysisResultParams,
   GetGromacsJobLogParams,
+  GetSetupParams,
   GromacsJob,
   GromacsJobRequest,
   ListAnalysisJobsParams,
@@ -66,9 +67,12 @@ import type {
   Problem,
   PublishRequest,
   PublishStatus,
+  SetupRun,
   Simulation,
   SimulationWrite,
   StartNotebookRequest,
+  StartSetupRequest,
+  StopSetupParams,
   TunerJob,
   TunerJobRequest,
   UpdateExperiment
@@ -3871,6 +3875,433 @@ export const useDeleteSimulation = <TError = globalThis.Error & { info?: Problem
         TContext
       > => {
       return useMutation(getDeleteSimulationMutationOptions(options), queryClient);
+    }
+
+export type startSetupResponse202 = {
+  data: SetupRun
+  status: 202
+}
+
+export type startSetupResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type startSetupResponse403 = {
+  data: Problem
+  status: 403
+}
+
+export type startSetupResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type startSetupResponse409 = {
+  data: Problem
+  status: 409
+}
+
+export type startSetupResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 202 | 400 | 403 | 404 | 409>
+}
+
+export type startSetupResponseSuccess = (startSetupResponse202) & {
+  headers: Headers;
+};
+export type startSetupResponseError = (startSetupResponse400 | startSetupResponse403 | startSetupResponse404 | startSetupResponse409 | startSetupResponseDefault) & {
+  headers: Headers;
+};
+
+export const getStartSetupUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup`
+}
+
+/**
+ * Execute the setup notebook headless in a Kubernetes Job.
+ * @summary Run setup
+ */
+export const startSetup = async (experimentId: string,
+    startSetupRequest: StartSetupRequest, options?: RequestInit): Promise<startSetupResponseSuccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getStartSetupUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(startSetupRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: startSetupResponseError['data'], status?: number} = new globalThis.Error();
+    const data : startSetupResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: startSetupResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as startSetupResponseSuccess
+}
+
+
+
+
+
+export const getStartSetupMutationKey = () => ['startSetup'] as const;
+
+export const getStartSetupMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startSetup>>, TError,StartSetupMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof startSetup>>, TError,StartSetupMutationVariables, TContext> => {
+
+const mutationKey = getStartSetupMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startSetup>>, StartSetupMutationVariables> = (props) => {
+          const {experimentId,data} = props ?? {};
+
+          return  startSetup(experimentId,data,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartSetupMutationResult = NonNullable<Awaited<ReturnType<typeof startSetup>>>
+    export type StartSetupMutationBody = StartSetupRequest
+    export type StartSetupMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type StartSetupMutationVariables = {experimentId: string;data: StartSetupRequest}
+
+    /**
+ * @summary Run setup
+ */
+export const useStartSetup = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startSetup>>, TError,StartSetupMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof startSetup>>,
+        TError,
+        StartSetupMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStartSetupMutationOptions(options), queryClient);
+    }
+
+export type getSetupResponse200 = {
+  data: SetupRun
+  status: 200
+}
+
+export type getSetupResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type getSetupResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getSetupResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
+}
+
+export type getSetupResponseSuccess = (getSetupResponse200) & {
+  headers: Headers;
+};
+export type getSetupResponseError = (getSetupResponse400 | getSetupResponse404 | getSetupResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetSetupUrl = (experimentId: string,
+    params?: GetSetupParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup?${stringifiedParams}` : `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup`
+}
+
+/**
+ * Get the notebook's setup run (404 when setup never ran).
+ * @summary Get the setup run
+ */
+export const getSetup = async (experimentId: string,
+    params?: GetSetupParams, options?: RequestInit): Promise<getSetupResponseSuccess> => {
+
+  const res = await fetch(getGetSetupUrl(experimentId,params),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getSetupResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getSetupResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getSetupResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getSetupResponseSuccess
+}
+
+
+
+
+
+export const getGetSetupQueryKey = (experimentId: string,
+    params?: GetSetupParams,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetSetupQueryOptions = <TData = Awaited<ReturnType<typeof getSetup>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
+    params?: GetSetupParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSetupQueryKey(experimentId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSetup>>> = ({ signal }) => getSetup(experimentId,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetSetupQueryResult = NonNullable<Awaited<ReturnType<typeof getSetup>>>
+export type GetSetupQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetSetup<TData = Awaited<ReturnType<typeof getSetup>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    params: undefined |  GetSetupParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSetup>>,
+          TError,
+          Awaited<ReturnType<typeof getSetup>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSetup<TData = Awaited<ReturnType<typeof getSetup>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    params?: GetSetupParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getSetup>>,
+          TError,
+          Awaited<ReturnType<typeof getSetup>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetSetup<TData = Awaited<ReturnType<typeof getSetup>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    params?: GetSetupParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get the setup run
+ */
+
+export function useGetSetup<TData = Awaited<ReturnType<typeof getSetup>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    params?: GetSetupParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSetup>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetSetupQueryOptions(experimentId,params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type stopSetupResponse204 = {
+  data: void
+  status: 204
+}
+
+export type stopSetupResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type stopSetupResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type stopSetupResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
+}
+
+export type stopSetupResponseSuccess = (stopSetupResponse204) & {
+  headers: Headers;
+};
+export type stopSetupResponseError = (stopSetupResponse400 | stopSetupResponse404 | stopSetupResponseDefault) & {
+  headers: Headers;
+};
+
+export const getStopSetupUrl = (experimentId: string,
+    params?: StopSetupParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup?${stringifiedParams}` : `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/setup`
+}
+
+/**
+ * Stop the run in progress.
+ * @summary Stop the setup run
+ */
+export const stopSetup = async (experimentId: string,
+    params?: StopSetupParams, options?: RequestInit): Promise<stopSetupResponseSuccess> => {
+
+  const res = await fetch(getStopSetupUrl(experimentId,params),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: stopSetupResponseError['data'], status?: number} = new globalThis.Error();
+    const data : stopSetupResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: stopSetupResponseSuccess['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as stopSetupResponseSuccess
+}
+
+
+
+
+
+export const getStopSetupMutationKey = () => ['stopSetup'] as const;
+
+export const getStopSetupMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopSetup>>, TError,StopSetupMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof stopSetup>>, TError,StopSetupMutationVariables, TContext> => {
+
+const mutationKey = getStopSetupMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopSetup>>, StopSetupMutationVariables> = (props) => {
+          const {experimentId,params} = props ?? {};
+
+          return  stopSetup(experimentId,params,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StopSetupMutationResult = NonNullable<Awaited<ReturnType<typeof stopSetup>>>
+
+    export type StopSetupMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type StopSetupMutationVariables = {experimentId: string;params?: StopSetupParams}
+
+    /**
+ * @summary Stop the setup run
+ */
+export const useStopSetup = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopSetup>>, TError,StopSetupMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof stopSetup>>,
+        TError,
+        StopSetupMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStopSetupMutationOptions(options), queryClient);
     }
 
 export type listGromacsJobsResponse200 = {

@@ -16,17 +16,21 @@ from types import SimpleNamespace
 from clients.k8s import K8sClient
 from core.cache import mdrepo_status_cache
 from core.config import DATA_DIR
-from core.enums import JobStatus, NotebookTier, PodStatus
+from core.db import session_factory
+from core.enums import Engine, JobStatus, NotebookTier, PodStatus
 from modules.archive.status import ArchiveStatus
 from modules.archive.status import write_status as write_archive_status
+from modules.experiments.models import Experiment
 from modules.population.downloader import ERROR_VALIDATION
 from modules.population.receipt import write_receipt as write_population_receipt
 from modules.publishing.status import UploadStatus, read_status
 from modules.publishing.status import write_status as write_upload_status
 from modules.publishing.submission import EXPERIMENT_LABEL
+from modules.setup.service import SETUP_APP_LABEL
 
 from ..analysis_data import start_analysis_thread
 from ..state import E2E, demo_state
+from .setup_job import start_setup_job
 
 logger = logging.getLogger(__name__)
 
@@ -429,7 +433,16 @@ class DemoK8sClient(K8sClient):
         return True
 
     async def create_job_raw(self, manifest: dict) -> None:
-        """Run an upload/archive worker Job on a thread."""
+        """Run an upload/archive/setup worker Job on a thread."""
+        labels = manifest["metadata"]["labels"]
+        if labels.get("app") == SETUP_APP_LABEL:
+            experiment_id = labels[EXPERIMENT_LABEL]
+            async with session_factory()() as session:
+                experiment = await session.get(Experiment, experiment_id)
+            notebook, _, status = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
+            engine = experiment.engine if experiment is not None else Engine.GMX
+            start_setup_job(manifest["metadata"]["name"], experiment_id, engine, notebook, status)
+            return
         _create_job_raw(manifest)
 
     async def wait_for_pod_admission(
@@ -440,14 +453,23 @@ class DemoK8sClient(K8sClient):
         """Admit worker pods at once."""
         return True
 
+    async def list_pods_by_label(self, label_selector: str) -> list:  # ruff:ignore[unused-method-argument]
+        """Demo worker pods schedule at once and never fail on infrastructure."""
+        return []
+
     async def read_job(self, name: str) -> object | None:
-        """Worker Job (upload/archive/population) while its thread runs."""
+        """Worker Job (upload/archive/population) while its thread runs; setup Jobs until deleted."""
+        if (setup := demo_state.setup_jobs.get(name)) is not None:
+            kind = {"complete": "Complete", "failed": "Failed"}.get(setup)
+            conditions = [SimpleNamespace(type=kind, status="True", reason=None)] if kind else None
+            return SimpleNamespace(status=SimpleNamespace(conditions=conditions))
         return _read_worker_job(name)
 
     async def delete_job_foreground(self, name: str) -> None:
-        """Forget a worker Job."""
+        """Forget a worker Job (a running setup thread sees it gone and stops)."""
         demo_state.upload_jobs.pop(name, None)
         demo_state.population_jobs.pop(name, None)
+        demo_state.setup_jobs.pop(name, None)
 
     async def wait_for_resource_absence(
         self,
