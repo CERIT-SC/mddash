@@ -118,6 +118,18 @@ export const ListExperimentsResponseItem = zod.object({
   "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
   "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
 }).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
+  "population": zod.union([zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']).describe('Lifecycle of a Datahugger-NG population operation (member name == wire value).'),
+  "phase": zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']).describe('Worker phase carried in the population receipt and linked operation (name == wire value).'),
+  "files_present": zod.int(),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int(),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
@@ -184,9 +196,9 @@ export const ListExperimentsResponse = zod.array(ListExperimentsResponseItem)
 /**
  * Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
  *
- * Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
- * one-shot download worker, and returns the operation to follow instead of an
- * experiment (the experiment appears only after the download succeeds).
+ * Datahugger-NG creation is asynchronous: it prepares the notebooks, commits a
+ * provisional experiment, queues a one-shot download worker, and returns the
+ * operation identifiers while the import progresses in the background.
  * @summary Create an experiment
  */
 
@@ -249,6 +261,18 @@ export const CreateExperimentResponse = zod.object({
   "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
   "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
 }).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
+  "population": zod.union([zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']).describe('Lifecycle of a Datahugger-NG population operation (member name == wire value).'),
+  "phase": zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']).describe('Worker phase carried in the population receipt and linked operation (name == wire value).'),
+  "files_present": zod.int(),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int(),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
@@ -367,6 +391,18 @@ export const GetExperimentResponse = zod.object({
   "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
   "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
 }).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
+  "population": zod.union([zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']).describe('Lifecycle of a Datahugger-NG population operation (member name == wire value).'),
+  "phase": zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']).describe('Worker phase carried in the population receipt and linked operation (name == wire value).'),
+  "files_present": zod.int(),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int(),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
@@ -489,6 +525,18 @@ export const UpdateExperimentResponse = zod.object({
   "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
   "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
 }).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
+  "population": zod.union([zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']).describe('Lifecycle of a Datahugger-NG population operation (member name == wire value).'),
+  "phase": zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']).describe('Worker phase carried in the population receipt and linked operation (name == wire value).'),
+  "files_present": zod.int(),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int(),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
@@ -566,6 +614,136 @@ export const DeleteExperimentResponse = zod.void()
 
 
 /**
+ * Stop an active Datahugger import after its worker is confirmed deleted.
+ * @summary Cancel a Datahugger population
+ */
+
+
+
+export const CancelExperimentPopulationParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const cancelExperimentPopulationResponseSourceOneFilesItemSizeMin = 0;
+
+export const cancelExperimentPopulationResponseSourceOneFileCountMin = 0;
+
+
+
+export const cancelExperimentPopulationResponseStepDefault = 0;
+export const cancelExperimentPopulationResponseStatusDefault = `setup`;
+export const cancelExperimentPopulationResponseCanPublishDefault = false;
+
+export const CancelExperimentPopulationResponse = zod.object({
+  "id": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "updated_at": zod.iso.datetime({"offset":true}),
+  "name": zod.string(),
+  "module_name": zod.union([zod.string(),zod.null()]).optional(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).'),zod.null()]).optional(),
+  "latest_simulation_path": zod.union([zod.string(),zod.null()]),
+  "source": zod.union([zod.object({
+  "type": zod.enum(['pdb', 'repo', 'file']),
+  "pdb_id": zod.string().optional(),
+  "url": zod.string().optional(),
+  "files": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.int().min(cancelExperimentPopulationResponseSourceOneFilesItemSizeMin),
+  "path": zod.string(),
+  "url": zod.string()
+}).describe('A file inside an experiment directory with its download URL.')),
+  "file_count": zod.int().min(cancelExperimentPopulationResponseSourceOneFileCountMin).optional()
+}).describe('Structured experiment provenance.'),zod.null()]).optional(),
+  "size_bytes": zod.union([zod.int(),zod.null()]).optional(),
+  "notebooks_repo": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_published": zod.union([zod.boolean(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "notebook": zod.union([zod.object({
+  "id": zod.int(),
+  "experiment_id": zod.string(),
+  "token": zod.string(),
+  "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
+  "gpu": zod.boolean(),
+  "path": zod.string(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
+  "population": zod.union([zod.object({
+  "operation_id": zod.string(),
+  "experiment_id": zod.string(),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']).describe('Lifecycle of a Datahugger-NG population operation (member name == wire value).'),
+  "phase": zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']).describe('Worker phase carried in the population receipt and linked operation (name == wire value).'),
+  "files_present": zod.int(),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int(),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
+  "tuner_jobs": zod.array(zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "nsteps": zod.int(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "is_stopped": zod.boolean(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "is_live": zod.boolean(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
+  "trials": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')),
+  "simulation_jobs": zod.array(zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.')
+}).describe('A production run of one simulation manifest (engine-specific fields pass through).')),
+  "analysis_jobs": zod.array(zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')),
+  "step": zod.int().default(cancelExperimentPopulationResponseStepDefault),
+  "status": zod.string().default(cancelExperimentPopulationResponseStatusDefault),
+  "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "can_publish": zod.boolean().default(cancelExperimentPopulationResponseCanPublishDefault),
+  "mdrepo_record_url": zod.union([zod.string(),zod.null()]).optional()
+}).describe('A molecular dynamics experiment with its notebook and jobs.')
+
+
+/**
  * Read-only status of a Datahugger-NG population operation.
  *
  * Reconciliation (finalization and failure handling) is owned by the app
@@ -579,12 +757,21 @@ export const GetExperimentPopulationJobParams = zod.object({
   "operation_id": zod.string().min(1)
 })
 
+export const getExperimentPopulationJobResponseFilesPresentDefault = 0;
+export const getExperimentPopulationJobResponseBytesPresentDefault = 0;
+
 export const GetExperimentPopulationJobResponse = zod.object({
   "operation_id": zod.string(),
   "experiment_id": zod.string(),
-  "status": zod.enum(['queued', 'running', 'succeeded', 'failed']),
+  "status": zod.enum(['queued', 'running', 'cancelling', 'succeeded', 'failed', 'cancelled']),
+  "phase": zod.union([zod.enum(['starting', 'crawling', 'downloading', 'finalizing', 'cancelling']),zod.null()]).optional(),
+  "files_present": zod.int().default(getExperimentPopulationJobResponseFilesPresentDefault),
+  "files_total": zod.union([zod.int(),zod.null()]).optional(),
+  "bytes_present": zod.int().default(getExperimentPopulationJobResponseBytesPresentDefault),
+  "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
+  "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
   "error": zod.union([zod.string(),zod.null()]).optional()
-}).describe('Read-only status of a Datahugger-NG population operation.')
+}).describe('Read-only status of a Datahugger-NG population operation (legacy alias).')
 
 
 /**

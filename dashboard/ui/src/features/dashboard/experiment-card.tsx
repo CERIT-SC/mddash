@@ -4,6 +4,7 @@ import { toApiError } from "@/api/errors"
 import {
   getListExperimentsQueryKey,
   useArchiveExperiment,
+  useCancelExperimentPopulation,
   useDeleteExperiment,
   useGetArchiveStatus,
   useListAnalysisResults,
@@ -13,7 +14,7 @@ import {
   useStopNotebook,
   useUpdateExperiment,
 } from "@/api/generated/client"
-import type { Experiment } from "@/api/generated/models"
+import type { Experiment, Population } from "@/api/generated/models"
 import { getAnalysisLabel } from "@/features/analyze"
 import {
   isNotebookQuotaError,
@@ -25,8 +26,10 @@ import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import { ModuleIconTile } from "@/shared/module-icon"
 import { isNotebookActive } from "@/shared/pod-status"
+import { populationCounters, populationPolling, populationReady } from "@/shared/population-state"
 import { sourceLabel } from "@/shared/source"
 import { InfoBanner } from "@/shared/ui/info-banner"
+import { PopulationProgress } from "@/shared/ui/population-progress"
 import {
   Alert,
   AlertDescription,
@@ -220,6 +223,16 @@ function StepDetails({ experiment, stepIndex }: { experiment: Experiment; stepIn
 
 type ExperimentCardProps = { experiment: Experiment }
 
+export function ExperimentCard({ experiment }: ExperimentCardProps) {
+  // A non-succeeded import owns the card (own layout, controls, dialogs). Dispatch
+  // before any hooks so both variants keep a stable hook order while the import
+  // settles and the same card flips to the regular one.
+  if (experiment.population !== null && !populationReady(experiment)) {
+    return <PopulationCard experiment={experiment} population={experiment.population} />
+  }
+  return <RegularExperimentCard experiment={experiment} />
+}
+
 function activeJobCount(experiment: Experiment): number {
   return (
     experiment.simulation_jobs.filter((job) => job.is_live).length +
@@ -228,7 +241,7 @@ function activeJobCount(experiment: Experiment): number {
   )
 }
 
-export function ExperimentCard({ experiment }: ExperimentCardProps) {
+function RegularExperimentCard({ experiment }: ExperimentCardProps) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -657,6 +670,165 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
       </AlertDialog>
 
       <NotebookQuotaDialog open={quotaOpen} onOpenChange={setQuotaOpen} pendingStart={pendingStart} />
+    </Card>
+  )
+}
+
+type PopulationCardProps = { experiment: Experiment; population: Population }
+
+// The provisional experiment card: no rename/notebook/archive controls until the
+// import succeeds. Active imports offer cancellation; terminal failures and
+// cancellations offer deletion, keeping the row (and its last measured progress)
+// visible until the user removes it.
+function PopulationCard({ experiment, population }: PopulationCardProps) {
+  const queryClient = useQueryClient()
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
+  const onMutationError = (error: unknown) => toast.error(toApiError(error).message)
+
+  const active = populationPolling(population)
+
+  const cancel = useCancelExperimentPopulation({
+    mutation: {
+      onSuccess: () => {
+        toast.success(`Import for “${experiment.name}” is being cancelled`)
+        invalidate()
+      },
+      onError: onMutationError,
+    },
+  })
+  const remove = useDeleteExperiment({
+    mutation: {
+      onSuccess: () => {
+        toast.success(`Experiment “${experiment.name}” deleted`)
+        invalidate()
+      },
+      onError: onMutationError,
+    },
+  })
+
+  const hadProgress = population.files_present > 0 || population.bytes_present > 0
+
+  return (
+    <Card className="relative pb-0 transition-shadow hover:shadow-md">
+      <CardHeader>
+        <div className="flex min-w-0 items-center gap-3">
+          <ModuleIconTile category={experiment.module_category} />
+          <div className="min-w-0">
+            <CardTitle className="truncate leading-tight">
+              <Link
+                to="/experiments/$experimentId"
+                params={{ experimentId: experiment.id }}
+                className="after:absolute after:inset-0"
+              >
+                {experiment.name}
+              </Link>
+            </CardTitle>
+            <p className="text-text-muted truncate text-sm" title={subtitle(experiment)}>
+              {subtitle(experiment)}
+            </p>
+          </div>
+        </div>
+        <CardAction>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative z-10"
+                aria-label={`Actions for ${experiment.name}`}
+              >
+                <Ellipsis size={18} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {active ? (
+                <DropdownMenuItem onSelect={() => setCancelOpen(true)} disabled={cancel.isPending}>
+                  <Square fill="currentColor" className="h-4 w-4" /> Cancel import
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)}>
+                  <Trash2 className="h-4 w-4" /> Delete
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </CardAction>
+      </CardHeader>
+
+      <CardContent className="space-y-2">
+        {population.status === "failed" ? (
+          <Alert variant="error">
+            <AlertTitle>Import failed</AlertTitle>
+            <AlertDescription>{population.error ?? "The repository download failed."}</AlertDescription>
+          </Alert>
+        ) : population.status === "cancelled" ? (
+          <Alert>
+            <AlertTitle>Import cancelled</AlertTitle>
+            <AlertDescription>
+              The repository import was cancelled before it finished. The experiment has no data yet; delete it to
+              remove it from your list.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <PopulationProgress population={population} />
+        )}
+        {!active && hadProgress && (
+          <p className="text-text-muted text-sm tabular-nums">{populationCounters(population)}</p>
+        )}
+      </CardContent>
+
+      <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
+        <span className="text-text-muted truncate">{sourceLabel(experiment.source) ?? ""}</span>
+      </CardFooter>
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel the import of “{experiment.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The download stops immediately and the data already fetched is removed. The experiment stays in your list
+              until you delete it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep importing</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => cancel.mutate({ experimentId: experiment.id })}
+              disabled={cancel.isPending}
+            >
+              Cancel import
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="text-error h-5 w-5" aria-hidden="true" />
+              Delete experiment “{experiment.name}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The unfinished repository import and everything already downloaded are removed. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "error" })}
+              onClick={() => remove.mutate({ experimentId: experiment.id })}
+              disabled={remove.isPending}
+            >
+              <Trash2 aria-hidden="true" />
+              Delete experiment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

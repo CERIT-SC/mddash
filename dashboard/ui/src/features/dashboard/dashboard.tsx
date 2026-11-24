@@ -1,6 +1,7 @@
 import { useGetNotebookConfig, useListExperiments } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
 import { isNotebookActive } from "@/shared/pod-status"
+import { populationReady } from "@/shared/population-state"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
   Badge,
@@ -101,8 +102,12 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
   const archived = filtered.filter(isArchived)
   const archivedGroups = groupByArchiveRecency(archived)
 
-  const running = active.filter((experiment) => isNotebookActive(experiment.notebook?.status))
-  const stopped = active.filter((experiment) => !isNotebookActive(experiment.notebook?.status))
+  // Unfinished imports (and their durable failures) sit in their own group; the
+  // notebook groups below never include them.
+  const populating = active.filter((experiment) => !populationReady(experiment))
+  const settled = active.filter(populationReady)
+  const running = settled.filter((experiment) => isNotebookActive(experiment.notebook?.status))
+  const stopped = settled.filter((experiment) => !isNotebookActive(experiment.notebook?.status))
 
   return (
     <section className="space-y-6 md:space-y-8">
@@ -192,6 +197,16 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
         )
       ) : (
         <div className="space-y-8">
+          {populating.length > 0 && (
+            <div className="space-y-4">
+              <SectionHeading count={populating.length}>Populating</SectionHeading>
+              <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {populating.map((experiment) => (
+                  <ExperimentCard key={experiment.id} experiment={experiment} />
+                ))}
+              </div>
+            </div>
+          )}
           {running.length > 0 && (
             <div className="space-y-4">
               <SectionHeading count={running.length} limit={concurrentLimit}>

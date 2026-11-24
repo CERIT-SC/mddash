@@ -8,12 +8,14 @@ import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
+import { populationPolling, populationReady } from "@/shared/population-state"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent } from "@/shared/ui/stepper"
 import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
 import { ArchivedNotice } from "./archived-notice"
+import { PopulationPage } from "./population-page"
 import { WizardStepperHeader } from "./stepper-header"
 import { TitleRow } from "./title-row"
 
@@ -36,9 +38,14 @@ const pollWhileAnyLive =
     return data?.status === 200 && data.data.some((simulation) => simulation.live) ? pollMs : false
   }
 
-const pollWhileRestoring = (query: { state: { data: unknown } }): number | false => {
+// Poll the experiment while it is restoring from the archive or while its
+// Datahugger import is in flight; the population page reads the live state.
+const pollWhileExperimentActive = (query: { state: { data: unknown } }): number | false => {
   const data = query.state.data as { status: number; data: Experiment } | undefined
-  return data?.status === 200 && data.data.archive_state === "restoring" ? SIMULATIONS_POLL_MS : false
+  if (data?.status !== 200) return false
+  return data.data.archive_state === "restoring" || populationPolling(data.data.population)
+    ? SIMULATIONS_POLL_MS
+    : false
 }
 
 export type WizardSearch = {
@@ -65,11 +72,20 @@ type ExperimentWizardProps = {
 }
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
-  const experiment = useGetExperiment(experimentId, { query: { retry: false, refetchInterval: pollWhileRestoring } })
+  const experiment = useGetExperiment(experimentId, {
+    query: { retry: false, refetchInterval: pollWhileExperimentActive },
+  })
+  // No simulation manifest can exist before the import finishes and merges the
+  // dataset, so the list query waits for the experiment's population state.
+  const experimentData = experiment.data?.status === 200 ? experiment.data.data : undefined
   // The wizard heartbeat: the step ladder advances server-side, so the stepper
   // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {
-    query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
+    query: {
+      retry: false,
+      enabled: experimentData === undefined ? false : populationReady(experimentData),
+      refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS),
+    },
   })
 
   // can_publish flips when a run finishes; this query doesn't poll. Refetch
@@ -85,15 +101,31 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   if (experiment.isError) {
     return <ApiErrorAlert error={experiment.error} onRetry={() => void experiment.refetch()} />
   }
+
+  // The default tab comes from the experiment, so the body waits on the
+  // experiment before deciding which page it is.
+  const data = experimentData
+  if (data === undefined) {
+    return (
+      <section className="space-y-6 md:space-y-8" aria-label="Loading experiment">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-9 w-80" />
+        <Skeleton className="h-16 w-full" />
+      </section>
+    )
+  }
+
+  // An unfinished import — and its durable terminal failures — gets the
+  // read-only population page; the wizard steps need the merged dataset.
+  if (data.population !== null && !populationReady(data)) {
+    return <PopulationPage experiment={data} population={data.population} />
+  }
+
   if (simulations.isError) {
     return <ApiErrorAlert error={simulations.error} onRetry={() => void simulations.refetch()} />
   }
-
-  // The default tab comes from the experiment, so the body waits on both
-  // queries instead of re-resolving the tab mid-paint.
-  const data = experiment.data?.status === 200 ? experiment.data.data : undefined
   const list = simulations.data?.status === 200 ? simulations.data.data : undefined
-  if (data === undefined || list === undefined) {
+  if (list === undefined) {
     return (
       <section className="space-y-6 md:space-y-8" aria-label="Loading experiment">
         <Skeleton className="h-10 w-64" />

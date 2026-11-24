@@ -1,4 +1,5 @@
 import type { AnalysisJob, Experiment } from "@/api/generated/models"
+import { populationPolling } from "@/shared/population-state"
 
 import { IN_FLIGHT as IN_FLIGHT_ARCHIVE_STATES } from "./archive"
 
@@ -12,6 +13,7 @@ export function isAnalysisJobLive(job: AnalysisJob): boolean {
 
 export function hasLiveWork(experiment: Experiment): boolean {
   return (
+    populationPolling(experiment.population) ||
     experiment.simulation_jobs.some((job) => job.is_live) ||
     experiment.tuner_jobs.some((job) => job.is_live) ||
     experiment.analysis_jobs.some(isAnalysisJobLive) ||

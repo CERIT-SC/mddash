@@ -1,18 +1,14 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { toApiError } from "@/api/errors"
-import { getListExperimentsQueryKey, useCreateExperiment, useGetExperimentPopulationJob } from "@/api/generated/client"
-import type { CreateExperimentForm, NotebookModule, PopulationJob } from "@/api/generated/models"
+import { getListExperimentsQueryKey, useCreateExperiment } from "@/api/generated/client"
+import type { CreateExperimentForm, NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
 import { CustomWorkflowIcon, ModuleIcon } from "@/shared/module-icon"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
-import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
   Button,
   cn,
   Dialog,
@@ -41,11 +37,6 @@ import { useDropzone, type FileRejection } from "react-dropzone"
 import { useForm, useWatch } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
-
-import { pollWhilePopulationActive } from "./population-state"
-
-/** Poll cadence for the population status while the download worker is active. */
-const POPULATION_POLL_MS = 3000
 
 /** SSH (git@host:owner/repo.git) or HTTP(S) with a host. */
 function isGitUrl(url: string): boolean {
@@ -189,47 +180,22 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
   const notebooksRepoValue = useWatch({ control: form.control, name: "notebooksRepo" })
   const isHttpsRepo = notebooksRepoValue.trim().startsWith("https://")
 
-  // A 202 response switches the dialog to following the population operation:
-  // the experiment exists only after the background download succeeds.
-  const [operation, setOperation] = useState<PopulationJob | null>(null)
-  const population = useGetExperimentPopulationJob(operation?.operation_id ?? "", {
-    query: {
-      enabled: operation !== null,
-      retry: false,
-      refetchInterval: pollWhilePopulationActive(POPULATION_POLL_MS),
-    },
-  })
-  const populationStatus = population.data?.data.status
-  const populationFailed = populationStatus === "failed"
-
   const create = useCreateExperiment({
     mutation: {
       onSuccess: (response) => {
-        if (response.status === 202) {
-          setOperation(response.data)
-          return
-        }
-        toast.success(`Experiment “${response.data.name}” created`)
         void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
         onClose()
-        void navigate({ to: "/experiments/$experimentId", params: { experimentId: response.data.id } })
+        // A 202 is the provisional experiment already being populated; its progress
+        // and any later failure live on the experiment page, not in this dialog.
+        const experimentId = response.status === 202 ? response.data.experiment_id : response.data.id
+        if (response.status !== 202) toast.success(`Experiment “${response.data.name}” created`)
+        void navigate({ to: "/experiments/$experimentId", params: { experimentId } })
       },
       onError: (error) => toast.error(toApiError(error).message),
     },
   })
 
-  // A succeeded population opens the now-existing experiment, like a 201 creation.
-  useEffect(() => {
-    if (!operation || populationStatus !== "succeeded") return
-    toast.success(`Experiment “${form.getValues("name").trim()}” ready`)
-    void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
-    onClose()
-    void navigate({ to: "/experiments/$experimentId", params: { experimentId: operation.experiment_id } })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [operation, populationStatus])
-
   function onSubmit(values: FormValues) {
-    if (operation) return // population already active; duplicate submits are disabled
     const data: CreateExperimentForm = { "experiment-name": values.name.trim(), type: values.source }
     if (values.source === "pdb") data.pdb = values.pdb.trim()
     if (values.source === "repo" || values.source === "datahugger") data["repo-url"] = values.repoUrl.trim()
@@ -398,34 +364,14 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                       <Input placeholder="e.g. https://github.com/owner/dataset" {...field} />
                     </FormControl>
                     <FormDescription>
-                      A public repository recognized by Datahugger-NG. The full repository is downloaded in the
-                      background before the experiment is ready.
+                      A public repository recognized by Datahugger-NG. The experiment opens immediately; the full
+                      repository is downloaded in the background and its progress is shown on the experiment page.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             )}
-
-            {operation &&
-              (populationFailed ? (
-                <Alert role="alert" variant="error">
-                  <AlertTitle>Experiment creation failed</AlertTitle>
-                  <AlertDescription>
-                    <p>{population.data?.data.error ?? "The repository download failed."}</p>
-                  </AlertDescription>
-                </Alert>
-              ) : population.isError ? (
-                <ApiErrorAlert error={population.error} onRetry={() => void population.refetch()} />
-              ) : populationStatus !== "succeeded" ? (
-                <div className="text-text-muted bg-surface flex items-center gap-2 rounded-md border p-3 text-sm">
-                  <LoaderCircle className="animate-spin" aria-hidden="true" />
-                  <span>
-                    Downloading the repository… You can close this dialog; the download continues in the background and
-                    the experiment opens when it is ready.
-                  </span>
-                </div>
-              ) : null)}
 
             {isCustom && (
               <>
@@ -490,9 +436,9 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>
-                {operation ? "Close" : "Cancel"}
+                Cancel
               </Button>
-              <Button type="submit" disabled={create.isPending || operation !== null}>
+              <Button type="submit" disabled={create.isPending}>
                 {create.isPending && <LoaderCircle className="animate-spin" aria-hidden="true" />}
                 {create.isPending ? "Creating…" : "Create Experiment"}
               </Button>

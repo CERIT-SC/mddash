@@ -12,6 +12,8 @@ export type PopulationOperationStatusStatus = typeof PopulationOperationStatusSt
 export const PopulationOperationStatusStatus = {
   queued: 'queued',
   running: 'running',
+  cancelling: 'cancelling',
   succeeded: 'succeeded',
   failed: 'failed',
+  cancelled: 'cancelled',
 } as const;

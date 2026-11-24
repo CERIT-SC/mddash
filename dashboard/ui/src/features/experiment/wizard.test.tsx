@@ -1,5 +1,5 @@
 import type { Simulation } from "@/api/generated/models"
-import { experiment } from "@/shared/fixtures/experiment"
+import { experiment, withPopulation } from "@/shared/fixtures/experiment"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -16,6 +16,14 @@ function renderWizard(overrides: Partial<Simulation> = {}) {
     "/experiments/exp1": Response.json(experiment("exp1", { latest_simulation_path: SIM, can_publish: false })),
   })
   return renderWithProviders(<ExperimentWizard experimentId="exp1" search={{}} onSearchChange={vi.fn()} />)
+}
+
+async function renderPopulationWizard(population: Parameters<typeof withPopulation>[1]) {
+  const calls = mockApiBySuffix({
+    "/experiments/exp1": Response.json(experiment("exp1", { population: withPopulation("exp1", population) })),
+  })
+  await renderWithProviders(<ExperimentWizard experimentId="exp1" search={{}} onSearchChange={vi.fn()} />)
+  return calls
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -39,5 +47,53 @@ describe("ExperimentWizard implicit landing", () => {
   it("tracks the ladder once a run exists", async () => {
     await renderWizard({ step: 2, status: "simulating", live: true })
     expect(await screen.findByText("Section 3 of 5: Run")).toBeInTheDocument()
+  })
+})
+
+describe("ExperimentWizard population gate", () => {
+  it("shows the read-only population page instead of the wizard while the import runs", async () => {
+    const calls = await renderPopulationWizard({
+      status: "running",
+      phase: "downloading",
+      files_present: 2,
+      files_total: 8,
+      bytes_present: 51200,
+      bytes_total: 204800,
+      byte_percentage: 25,
+    })
+
+    expect(await screen.findByText(/downloading the repository/i)).toBeInTheDocument()
+    expect(screen.getByText(/2 of 8 files present/)).toBeInTheDocument()
+    expect(screen.getByText("25%")).toBeInTheDocument()
+    // No rename control and no wizard steps while the import is unfinished.
+    expect(screen.queryByRole("button", { name: "Rename experiment" })).not.toBeInTheDocument()
+    expect(screen.queryByText(/section 1 of 5/i)).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /cancel import/i })).toBeInTheDocument()
+    // No simulation manifest can exist yet: the simulations query stays disabled.
+    expect(calls.some((call) => call.url.endsWith("/experiments/exp1/simulations"))).toBe(false)
+  })
+
+  it("keeps a failed import on the population page with its safe error", async () => {
+    await renderPopulationWizard({
+      status: "failed",
+      error: "The repository could not be fetched.",
+      files_present: 1,
+      bytes_present: 1024,
+    })
+
+    expect(await screen.findByText("Import failed")).toBeInTheDocument()
+    expect(screen.getByText("The repository could not be fetched.")).toBeInTheDocument()
+    // Last measured counters are retained next to the failure.
+    expect(screen.getByText(/1 file present/)).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /cancel import/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/section 1 of 5/i)).not.toBeInTheDocument()
+  })
+
+  it("shows a cancelled import as a durable terminal state", async () => {
+    await renderPopulationWizard({ status: "cancelled" })
+
+    expect(await screen.findByText("Import cancelled")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /cancel import/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/section 1 of 5/i)).not.toBeInTheDocument()
   })
 })

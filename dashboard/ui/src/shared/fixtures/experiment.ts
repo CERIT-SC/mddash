@@ -1,4 +1,4 @@
-import type { Experiment, PodStatus } from "@/api/generated/models"
+import type { Experiment, PodStatus, Population, PopulationPhase } from "@/api/generated/models"
 
 export function experiment(id: string, overrides: Partial<Experiment> = {}): Experiment {
   return {
@@ -10,6 +10,7 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     engine: "GMX",
     latest_simulation_path: null,
     notebook: null,
+    population: null,
     tuner_jobs: [],
     simulation_jobs: [],
     analysis_jobs: [],
@@ -18,6 +19,24 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     archived_at: null,
     archive_state: null,
     ...overrides,
+  }
+}
+
+export function withPopulation(
+  experimentId: string,
+  population: Partial<Population> & Pick<Population, "status">
+): Population {
+  return {
+    operation_id: `op-${experimentId}`,
+    experiment_id: experimentId,
+    phase: "starting" satisfies PopulationPhase,
+    files_present: 0,
+    files_total: null,
+    bytes_present: 0,
+    bytes_total: null,
+    byte_percentage: null,
+    error: null,
+    ...population,
   }
 }
 

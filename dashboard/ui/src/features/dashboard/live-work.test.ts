@@ -1,5 +1,5 @@
 import type { AnalysisJob, SimulationJob, TunerJob } from "@/api/generated/models"
-import { experiment } from "@/shared/fixtures/experiment"
+import { experiment, withPopulation } from "@/shared/fixtures/experiment"
 import { describe, expect, it } from "vitest"
 
 import { hasLiveWork, isAnalysisJobLive } from "./live-work"
@@ -66,6 +66,16 @@ describe("hasLiveWork", () => {
       expect(isAnalysisJobLive(analysisJob(status))).toBe(true)
       expect(hasLiveWork(experiment("e1", { analysis_jobs: [analysisJob(status)] }))).toBe(true)
     }
+  })
+
+  it("keeps polling while a Datahugger import is in flight, and rests for terminal ones", () => {
+    for (const status of ["queued", "running", "cancelling"] as const) {
+      expect(hasLiveWork(experiment("e1", { population: withPopulation("e1", { status }) }))).toBe(true)
+    }
+    for (const status of ["succeeded", "failed", "cancelled"] as const) {
+      expect(hasLiveWork(experiment("e1", { population: withPopulation("e1", { status }) }))).toBe(false)
+    }
+    expect(hasLiveWork(experiment("e1"))).toBe(false)
   })
 
   it("keeps polling while archive work is in flight", () => {
