@@ -12,25 +12,57 @@ test("create an experiment from a PDB id", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
 })
 
-test("create an experiment from a Datahugger-NG repository", async ({ page }) => {
+test("opens the provisional experiment immediately and finalizes the import", async ({ page }) => {
   await page.goto("./")
   await page.getByRole("link", { name: "New", exact: true }).click()
   await page.getByRole("button", { name: "Use custom workflow" }).click()
 
-  await page.getByLabel("Name").fill("E2E Datahugger")
+  await page.getByLabel("Name").fill("E2E Datahugger journey")
   await page.getByRole("tab", { name: "Datahugger-NG" }).click()
-  await page.getByLabel("Repository URL").fill("https://github.com/owner/dataset")
+  // "demo-slow" stretches the demo download so the provisional state is observable
+  await page.getByLabel("Repository URL").fill("https://github.com/owner/demo-slow-dataset")
   await page.getByRole("button", { name: "Create Experiment" }).click()
 
-  // the 202 switches the dialog to following the background download
-  await expect(page.getByText(/downloading the repository/i)).toBeVisible()
+  // The 202 closes the dialog and opens the provisional experiment with live progress.
+  await expect(page).toHaveURL(/\/experiments\/[a-z0-9]+/)
+  await expect(page.getByRole("button", { name: "Cancel import" })).toBeVisible()
 
-  // the demo worker and the API monitor finalize within a few seconds; the
-  // dialog then opens the now-existing experiment
-  await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+  // The progress survives navigation: the dashboard lists the import in its own
+  // Populating group, and returning to the experiment resumes the import view.
+  await page.getByRole("link", { name: "Home", exact: true }).click()
+  await expect(page.getByRole("heading", { name: /Populating/ })).toBeVisible()
+  await page.getByRole("link", { name: "E2E Datahugger journey" }).click()
+  await expect(page.getByRole("button", { name: "Cancel import" })).toBeVisible()
+
+  // The demo worker and the API monitor finalize within a few seconds; the
+  // provisional experiment then transitions to the ordinary wizard.
+  await expect(page.getByRole("heading", { name: "Set up your simulation" })).toBeVisible({ timeout: 30_000 })
 })
 
-test("shows a durable error when Datahugger-NG population fails", async ({ page }) => {
+test("cancels a Datahugger-NG import mid-download", async ({ page }) => {
+  await page.goto("./")
+  await page.getByRole("link", { name: "New", exact: true }).click()
+  await page.getByRole("button", { name: "Use custom workflow" }).click()
+
+  await page.getByLabel("Name").fill("E2E Datahugger cancel")
+  await page.getByRole("tab", { name: "Datahugger-NG" }).click()
+  await page.getByLabel("Repository URL").fill("https://github.com/owner/demo-slow-dataset")
+  await page.getByRole("button", { name: "Create Experiment" }).click()
+
+  await expect(page.getByRole("button", { name: "Cancel import" })).toBeVisible()
+  await page.getByRole("button", { name: "Cancel import" }).click()
+  await page.getByRole("alertdialog").getByRole("button", { name: "Cancel import" }).click()
+
+  // The cancellation is durable: the experiment stays in the list with the notice.
+  await expect(page.getByText("Import cancelled")).toBeVisible()
+  await expect(page.getByText(/The repository import was cancelled/)).toBeVisible()
+
+  // And it keeps its place in the Populating group on the dashboard until deletion.
+  await page.getByRole("link", { name: "Home", exact: true }).click()
+  await expect(page.getByRole("heading", { name: /Populating/ })).toBeVisible()
+})
+
+test("shows a durable failure for a failed Datahugger-NG import", async ({ page }) => {
   await page.goto("./")
   await page.getByRole("link", { name: "New", exact: true }).click()
   await page.getByRole("button", { name: "Use custom workflow" }).click()
@@ -41,8 +73,10 @@ test("shows a durable error when Datahugger-NG population fails", async ({ page 
   await page.getByLabel("Repository URL").fill("https://github.com/owner/demo-fail-dataset")
   await page.getByRole("button", { name: "Create Experiment" }).click()
 
-  // the terminal failure stays in the dialog, not a toast
-  await expect(page.getByText("Experiment creation failed")).toBeVisible()
+  // The dialog still closes on 202; the failure is durable on the experiment page
+  // (safe error plus last measured progress), not a toast.
+  await expect(page).toHaveURL(/\/experiments\/[a-z0-9]+/)
+  await expect(page.getByText("Import failed")).toBeVisible()
   await expect(page.getByText("The downloaded repository files failed size or checksum validation.")).toBeVisible()
-  await expect(page.getByRole("button", { name: "Create Experiment" })).toBeDisabled()
+  await expect(page.getByText(/2 of 5 files present/)).toBeVisible()
 })

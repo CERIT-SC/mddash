@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from shutil import rmtree
 from types import SimpleNamespace
 
@@ -35,8 +36,10 @@ ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 # MDRepo upload job duration in seconds (0.5s in E2E mode)
 UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
-# Datahugger population job duration in seconds (0.5s in E2E mode)
-POPULATION_JOB_DURATION_SEC = 0.5 if E2E else 2.0
+# Datahugger population worker: one staged file + progress receipt per tick.
+# (demo-slow stretches the ticks so an import can be cancelled mid-download.)
+POPULATION_TICK_SEC = 0.25 if E2E else 1.5
+POPULATION_SLOW_TICK_SEC = 1.5 if E2E else 3.0
 
 
 def _create_job_raw(manifest: dict) -> None:
@@ -130,30 +133,96 @@ def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> Non
     mdrepo_status_cache.clear()
 
 
+def _demo_dataset(file_count: int) -> list[tuple[str, bytes]]:
+    """Deterministic staged dataset: one trajectory file per tick plus a manifest."""
+    entries = [
+        (f"files/trajectory-{i:02d}.xtc", b"\x89XTC" + bytes((i * 37 + k) % 256 for k in range(256 * (i + 1))))
+        for i in range(file_count)
+    ]
+    entries.append(("dataset-info.txt", b"Simulated Datahugger-NG dataset for the MDDash demo.\n"))
+    return entries
+
+
+def _staging_counts(staging: Path) -> tuple[int, int]:
+    """Measured staging progress: regular-file count and current byte total (the real sampler's job)."""
+    files = 0
+    size = 0
+    for path in staging.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            files += 1
+            size += path.stat().st_size
+    return files, size
+
+
 def _finish_population_job(job_name: str, operation_id: str, repo_url: str) -> None:
     """
-    Stand-in for the Datahugger population worker.
+    Stand-in for the Datahugger population worker (no external repository access).
 
-    Stages deterministic dataset content and writes a valid success receipt
-    (no external repository access). A repository URL containing "demo-fail"
-    deterministically fails the download instead.
+    Stages one deterministic file per tick, publishing a running receipt with
+    measured counters after each write, then a success receipt. It checks for
+    Job deletion (cancellation) before every write and stops without touching
+    the receipt again. A URL containing "demo-fail" deterministically fails
+    after partial staging; "demo-slow" stretches the ticks so the import can
+    be cancelled mid-download.
     """
-    time.sleep(POPULATION_JOB_DURATION_SEC)
-
     from modules.population.receipt import staging_dir  # ruff:ignore[import-outside-top-level]
 
-    if "demo-fail" in repo_url:
-        write_population_receipt(operation_id, "failed", ERROR_VALIDATION)
+    failed = "demo-fail" in repo_url
+    tick = POPULATION_SLOW_TICK_SEC if "demo-slow" in repo_url else POPULATION_TICK_SEC
+    dataset = _demo_dataset(4)
+    files_total, bytes_total = len(dataset), sum(len(content) for _, content in dataset)
+
+    # Pre-crawl: totals are known before the download starts.
+    write_population_receipt(
+        operation_id, "running", phase="crawling", files_total=files_total, bytes_total=bytes_total
+    )
+
+    staged = dataset[:2] if failed else dataset
+    for relative_path, content in staged:
+        time.sleep(tick)
+        if job_name not in demo_state.population_jobs:
+            return  # the worker Job was deleted (cancellation) mid-flight
+        path = staging_dir(operation_id) / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        files_present, bytes_present = _staging_counts(staging_dir(operation_id))
+        write_population_receipt(
+            operation_id,
+            "running",
+            phase="downloading",
+            files_present=files_present,
+            files_total=files_total,
+            bytes_present=bytes_present,
+            bytes_total=bytes_total,
+        )
+
+    if failed:
+        # Deterministic validation failure after partial staging (safe error, last counters).
+        files_present, bytes_present = _staging_counts(staging_dir(operation_id))
+        write_population_receipt(
+            operation_id,
+            "failed",
+            ERROR_VALIDATION,
+            phase="downloading",
+            files_present=files_present,
+            files_total=files_total,
+            bytes_present=bytes_present,
+            bytes_total=bytes_total,
+        )
         demo_state.population_jobs.pop(job_name, None)
         return
 
-    data = staging_dir(operation_id)
-    (data / "files").mkdir(parents=True, exist_ok=True)
-    (data / "files" / "demo-dataset.pdb").write_text(
-        "HEADER    DEMO DATASET\nATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N\nEND\n"
+    if job_name not in demo_state.population_jobs:
+        return
+    write_population_receipt(
+        operation_id,
+        "succeeded",
+        phase="finalizing",
+        files_present=files_total,
+        files_total=files_total,
+        bytes_present=bytes_total,
+        bytes_total=bytes_total,
     )
-    (data / "dataset-info.txt").write_text("Simulated Datahugger-NG dataset for the MDDash demo.\n")
-    write_population_receipt(operation_id, "succeeded")
     demo_state.population_jobs.pop(job_name, None)
 
 
