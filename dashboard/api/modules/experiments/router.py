@@ -9,7 +9,7 @@ from core.responses import problems
 from fastapi import APIRouter, File, Form, Response, UploadFile
 from fastapi.responses import JSONResponse
 
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ExperimentDep, ReadyExperimentDep
 from modules.experiments.schemas import Experiment as ExperimentOut
 from modules.experiments.schemas import UpdateExperiment
 from modules.experiments.service import ExperimentServiceDep
@@ -65,9 +65,9 @@ async def create(
     """
     Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
 
-    Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
-    one-shot download worker, and returns the operation to follow instead of an
-    experiment (the experiment appears only after the download succeeds).
+    Datahugger-NG creation is asynchronous: it prepares the notebooks, commits a
+    provisional experiment, queues a one-shot download worker, and returns the
+    operation identifiers while the import progresses in the background.
     """
     if source_type == "datahugger":
         if not repo_url:
@@ -114,16 +114,32 @@ async def get(
     return await dump(session, ExperimentOut, experiment)
 
 
+@router.post(
+    "/{experiment_id}/population/cancel",
+    summary="Cancel a Datahugger population",
+    operation_id="cancelExperimentPopulation",
+    response_description="Cancelled experiment",
+    responses=problems(404, 409),
+)
+async def cancel_population(
+    session: SessionDep, experiment: ExperimentDep, service: ExperimentServiceDep, tokens: TokensDep
+) -> ExperimentOut:
+    """Stop an active Datahugger import after its worker is confirmed deleted."""
+    await service.population.cancel(experiment)
+    await service.refresh_all([experiment], tokens)
+    return await dump(session, ExperimentOut, experiment)
+
+
 @router.patch(
     "/{experiment_id}",
     summary="Update an experiment",
     operation_id="updateExperiment",
     response_description="Updated experiment",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def update(
     session: SessionDep,
-    experiment: ExperimentDep,
+    experiment: ReadyExperimentDep,
     service: ExperimentServiceDep,
     tokens: TokensDep,
     body: UpdateExperiment,
@@ -141,7 +157,7 @@ async def update(
     summary="Delete an experiment",
     operation_id="deleteExperiment",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def delete(experiment: ExperimentDep, service: ExperimentServiceDep) -> None:
     """Delete an experiment and all associated resources."""

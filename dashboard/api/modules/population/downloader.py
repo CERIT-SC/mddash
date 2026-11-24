@@ -2,7 +2,11 @@
 
 import re
 from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from datahugger import Dataset
 
 # Fixed download concurrency; the binding's zero/unlimited default must not be used.
 DOWNLOAD_CONCURRENCY = 4
@@ -105,21 +109,33 @@ def sanitize_download_exception(exc: Exception) -> PopulationDownloadError:
     return PopulationDownloadError(ERROR_DOWNLOAD)
 
 
-def download_dataset(repo_url: str, dst_dir: Path) -> int:
+def resolve_dataset(repo_url: str) -> "Dataset":
+    """Resolve the public repository once; native resolution failures receive curated messages."""
+    # Imported lazily so tests can fake the pinned binding without the native package.
+    from datahugger import resolve  # ruff:ignore[import-outside-top-level]
+
+    try:
+        return resolve(repo_url)
+    except Exception as exc:
+        raise sanitize_download_exception(exc) from exc
+
+
+def download_resolved(dataset: "Dataset", dst_dir: Path) -> int:
     """
-    Resolve the public repository and download its full contents into `dst_dir` with validation.
+    Download the resolved dataset's full contents into `dst_dir` with validation.
 
     Blocking: the binding runs its own runtime and the worker performs it as the whole Job.
     Native failures are translated into stable user-facing messages; their raw details are
     logged only by the worker and never included in the domain exception.
     """
-    # Imported lazily so tests can fake the pinned binding without the native package.
-    from datahugger import resolve  # ruff:ignore[import-outside-top-level]
-
     try:
-        dataset = resolve(repo_url)
         return dataset.download_with_validation(dst_dir=dst_dir, limit=DOWNLOAD_CONCURRENCY)
     except PopulationDownloadError:
         raise
     except Exception as exc:
         raise sanitize_download_exception(exc) from exc
+
+
+def download_dataset(repo_url: str, dst_dir: Path) -> int:
+    """Resolve and download in one call (the worker instead reuses one resolved dataset)."""
+    return download_resolved(resolve_dataset(repo_url), dst_dir)

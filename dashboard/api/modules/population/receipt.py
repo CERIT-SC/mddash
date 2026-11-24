@@ -37,15 +37,36 @@ class PopulationReceipt:
 
     state: str
     error: str | None = None
+    phase: str | None = None
+    files_present: int = 0
+    files_total: int | None = None
+    bytes_present: int = 0
+    bytes_total: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-compatible dict."""
-        return {"state": self.state, "error": self.error}
+        return {
+            "state": self.state,
+            "error": self.error,
+            "phase": self.phase,
+            "files_present": self.files_present,
+            "files_total": self.files_total,
+            "bytes_present": self.bytes_present,
+            "bytes_total": self.bytes_total,
+        }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "PopulationReceipt":
         """Tolerate missing fields (older attempts may lack newer keys)."""
-        return cls(state=data.get("state", ""), error=data.get("error"))
+        return cls(
+            state=data.get("state", ""),
+            error=data.get("error"),
+            phase=data.get("phase"),
+            files_present=data.get("files_present", 0) or 0,
+            files_total=data.get("files_total"),
+            bytes_present=data.get("bytes_present", 0) or 0,
+            bytes_total=data.get("bytes_total"),
+        )
 
 
 def read_receipt(operation_id: str) -> PopulationReceipt | None:
@@ -54,6 +75,27 @@ def read_receipt(operation_id: str) -> PopulationReceipt | None:
     return None if data is None else PopulationReceipt.from_dict(data)
 
 
-def write_receipt(operation_id: str, state: str, error: str | None = None) -> None:
+def write_receipt(
+    operation_id: str,
+    state: str,
+    error: str | None = None,
+    *,
+    phase: str | None = None,
+    files_present: int = 0,
+    files_total: int | None = None,
+    bytes_present: int = 0,
+    bytes_total: int | None = None,
+) -> None:
     """Atomic write via temp file, fsync, rename."""
-    write_status_doc(receipt_path(operation_id), PopulationReceipt(state, error).to_dict())
+    write_status_doc(
+        receipt_path(operation_id),
+        PopulationReceipt(
+            state,
+            error,
+            phase=phase,
+            files_present=files_present,
+            files_total=files_total,
+            bytes_present=bytes_present,
+            bytes_total=bytes_total,
+        ).to_dict(),
+    )

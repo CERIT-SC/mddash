@@ -1,8 +1,8 @@
 """
 Datahugger-NG population operations.
 
-Independent of the experiments table: a failed population leaves no
-Experiment row, and terminal rows are pruned 24 hours after completion.
+Revised by 016: the operation is an owned child of a provisional Experiment
+that exists from submission, with no terminal pruning.
 
 Revision ID: 015
 Revises: 014

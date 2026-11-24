@@ -12,7 +12,7 @@ from core.utils import strip_run_control_args
 from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
 
-from modules.experiments.dependencies import get_experiment_or_404
+from modules.experiments.dependencies import get_ready_experiment_or_404
 from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.models import SimulationJob
 from modules.jobs.runs import RunService
@@ -41,7 +41,7 @@ class GromacsService(RunService[GromacsJob]):
         A live run is a 409 (`replace_terminal_run`).
         """
         check_simulation_path(simulation_path)
-        experiment = await get_experiment_or_404(self._session, experiment_id)
+        experiment = await get_ready_experiment_or_404(self._session, experiment_id)
         await self.replace_terminal_run(experiment.id, simulation_path)
 
         simulation = await anyio.to_thread.run_sync(Simulation.load_ready, experiment, simulation_path, ["run_input"])
@@ -85,7 +85,7 @@ class GromacsService(RunService[GromacsJob]):
         Raises:
             BadRequest: No run, live run, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
         """
-        experiment = await get_experiment_or_404(self._session, experiment_id)
+        experiment = await get_ready_experiment_or_404(self._session, experiment_id)
         latest = await self.find(experiment.id, simulation_path)
         if latest is None:
             raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")

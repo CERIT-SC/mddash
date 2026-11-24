@@ -5,7 +5,7 @@ from core.dependencies import SessionDep, SimulationPath, dump, dump_many
 from core.responses import problems
 from fastapi import APIRouter, Response
 
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ExperimentDep, ReadyExperimentDep
 from modules.simulations.schemas import Simulation as SimulationOut
 from modules.simulations.schemas import SimulationWrite
 from modules.simulations.service import SimulationServiceDep
@@ -36,7 +36,7 @@ async def list_simulations(
     responses=problems(400, 404, 409),
 )
 async def create_simulation(
-    session: SessionDep, experiment: ExperimentDep, service: SimulationServiceDep, body: SimulationWrite
+    session: SessionDep, experiment: ReadyExperimentDep, service: SimulationServiceDep, body: SimulationWrite
 ) -> SimulationOut:
     """Create a new simulation manifest."""
     return await dump(session, SimulationOut, await service.create(experiment, body.model_dump()))
@@ -65,7 +65,7 @@ async def get_simulation(
 )
 async def update_simulation(
     session: SessionDep,
-    experiment: ExperimentDep,
+    experiment: ReadyExperimentDep,
     service: SimulationServiceDep,
     simulation_path: SimulationPath,
     body: SimulationWrite,
@@ -81,10 +81,10 @@ async def update_simulation(
     summary="Delete a simulation manifest",
     operation_id="deleteSimulation",
     response_description="Operation completed successfully",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def delete_simulation(
-    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
+    experiment: ReadyExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
 ) -> None:
     """Delete a simulation manifest and cascade-delete all related jobs."""
     await service.delete(experiment, simulation_path)

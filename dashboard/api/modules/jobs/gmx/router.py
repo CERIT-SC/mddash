@@ -35,7 +35,7 @@ async def list_jobs(
     summary="Stop a GROMACS run, preserving its data",
     operation_id="stopGromacsJob",
     response_description="Operation completed successfully",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def stop_job(
     service: GromacsServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
@@ -50,7 +50,7 @@ async def stop_job(
     summary="Extend a finished or stopped GROMACS run from its checkpoint",
     operation_id="extendGromacsJob",
     response_description="Created GROMACS run extension",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def extend_job(
     session: SessionDep,
@@ -125,7 +125,7 @@ async def submit_job(
     summary="Delete a GROMACS job",
     operation_id="deleteGromacsJob",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def delete_job(
     service: GromacsServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath

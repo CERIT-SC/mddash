@@ -31,7 +31,7 @@ async def list_jobs(
     summary="Start a tuner job",
     operation_id="startTunerJob",
     response_description="Started tuner job",
-    responses={200: {"model": TunerJobOut, "description": "Existing tuner job"}, **problems(400, 404)},
+    responses={200: {"model": TunerJobOut, "description": "Existing tuner job"}, **problems(400, 404, 409)},
 )
 async def start_job(
     session: SessionDep,
@@ -54,7 +54,7 @@ async def start_job(
     summary="Stop a tuner job",
     operation_id="stopTunerJob",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def stop_job(service: TunerServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
     """Stop a running tuner job, keeping its observed trials."""
@@ -110,7 +110,7 @@ async def get_job(
     summary="Delete a tuner job",
     operation_id="deleteTunerJob",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def delete_job(
     service: TunerServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath

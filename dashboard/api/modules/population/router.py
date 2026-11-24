@@ -35,5 +35,11 @@ async def get_status(
         operation_id=operation.id,
         experiment_id=operation.experiment_id,
         status=operation.status.value,
+        phase=operation.phase.value,
+        files_present=operation.files_present,
+        files_total=operation.files_total,
+        bytes_present=operation.bytes_present,
+        bytes_total=operation.bytes_total,
+        byte_percentage=operation.byte_percentage,
         error=operation.error,
     )

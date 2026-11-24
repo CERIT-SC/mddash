@@ -6,7 +6,7 @@ from core.responses import problems
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ExperimentDep, ReadyExperimentDep
 from modules.mdrepo.dependencies import TokensDep
 from modules.publishing.schemas import MDPositPublication, MDRepoPublication, PublishRequest, PublishStatus
 from modules.publishing.service import PublishingServiceDep
@@ -22,11 +22,11 @@ router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
     responses={
         201: {"model": MDPositPublication, "description": "MDPosit publication package"},
         202: {"model": MDRepoPublication, "description": "MDRepo publication accepted"},
-        **problems(400, 401, 404),
+        **problems(400, 401, 404, 409),
     },
 )
 async def publish(
-    experiment: ExperimentDep,
+    experiment: ReadyExperimentDep,
     service: PublishingServiceDep,
     tokens: TokensDep,
     body: PublishRequest | None = None,

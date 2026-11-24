@@ -198,7 +198,7 @@ class TestTunerJobStartFailure:
         simulation.extra_args = ""
 
         with (
-            patch("modules.jobs.tuner.service.get_experiment_or_404", AsyncMock(return_value=_experiment())),
+            patch("modules.jobs.tuner.service.get_ready_experiment_or_404", AsyncMock(return_value=_experiment())),
             patch.object(service, "find", AsyncMock(return_value=None)),
             patch("modules.jobs.tuner.service.Simulation.get", return_value=simulation),
             patch.object(clients.tuner, "submit", AsyncMock(side_effect=exc)),

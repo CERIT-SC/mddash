@@ -69,6 +69,6 @@ async def submit_population_job(k8s: K8sClient, operation: PopulationOperation) 
         raise SubmissionError("Failed to submit the population worker Job.") from e
 
 
-async def delete_population_resources(k8s: K8sClient, operation: PopulationOperation) -> None:
-    """Foreground-delete the population Job."""
-    await delete_worker_job(k8s, operation.job_name)
+async def delete_population_resources(k8s: K8sClient, operation: PopulationOperation) -> bool:
+    """Foreground-delete the population Job; True only once its absence is confirmed."""
+    return await delete_worker_job(k8s, operation.job_name)

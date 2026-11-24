@@ -7,7 +7,7 @@ from fastapi import APIRouter
 
 from modules.archive.schemas import ArchiveAttempt, ArchiveStatus
 from modules.archive.service import ArchiveServiceDep
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ExperimentDep, ReadyExperimentDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
     response_description="Archive accepted",
     responses=problems(400, 404, 409),
 )
-async def archive(experiment: ExperimentDep, service: ArchiveServiceDep) -> ArchiveAttempt:
+async def archive(experiment: ReadyExperimentDep, service: ArchiveServiceDep) -> ArchiveAttempt:
     """Archive an experiment."""
     return {"attempt_id": await service.archive(experiment)}
 
@@ -35,7 +35,7 @@ async def archive(experiment: ExperimentDep, service: ArchiveServiceDep) -> Arch
     response_description="Restore accepted",
     responses=problems(400, 404, 409),
 )
-async def restore(experiment: ExperimentDep, service: ArchiveServiceDep) -> ArchiveAttempt:
+async def restore(experiment: ReadyExperimentDep, service: ArchiveServiceDep) -> ArchiveAttempt:
     """Restore an archived experiment."""
     return {"attempt_id": await service.restore(experiment)}
 

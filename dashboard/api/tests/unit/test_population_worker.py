@@ -1,6 +1,8 @@
 """Unit tests for the one-shot Datahugger-NG population worker (pinned binding boundary)."""
 
 import sys
+import threading
+import time
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -19,14 +21,41 @@ from modules.population.receipt import read_receipt, staging_dir
 OPERATION_ID = "0123456789abcdef"
 ARGS = ["--operation-id", OPERATION_ID, "--experiment-id", "abcde", "--repo-url", "https://github.com/test/dataset"]
 
+PDB_CONTENT = "HEADER    FAKE\nEND\n"
+INFO_CONTENT = "fake dataset\n"
+BYTES_TOTAL = len(PDB_CONTENT) + len(INFO_CONTENT)
+
+
+def _fake_entries() -> list[SimpleNamespace]:
+    """Pre-crawl entries: two downloadable files with known sizes, one directory to skip."""
+    return [
+        SimpleNamespace(name="files/", downloadable=False, size=None),
+        SimpleNamespace(name="files/dataset.pdb", downloadable=True, size=len(PDB_CONTENT)),
+        SimpleNamespace(name="info.txt", downloadable=True, size=len(INFO_CONTENT)),
+    ]
+
 
 @pytest.fixture
 def datahugger(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     """Stand-in for the pinned `datahugger` Python bindings (no network, no native runtime)."""
-    state: dict[str, str | bool | None] = {"fail": False, "resolve_error": None}
-    calls: dict = {"resolve": [], "download": []}
+    state: dict[str, object] = {
+        "fail": False,
+        "resolve_error": None,
+        "crawl_error": None,
+        "crawl_entries": _fake_entries(),
+        "download_block": None,  # threading.Event: set once staging files exist
+        "download_release": None,  # threading.Event: lets a blocked download finish
+    }
+    calls: dict = {"resolve": [], "crawl": [], "download": []}
 
     class FakeDataset:
+        def crawl_file(self):
+            if state["crawl_error"]:
+                raise RuntimeError(str(state["crawl_error"]))
+            entries = list(state["crawl_entries"])  # ty: ignore[invalid-argument-type]
+            calls["crawl"].append(entries)
+            return iter(entries)
+
         def download_with_validation(self, dst_dir: Path, limit: int | None = None) -> int:
             receipt = read_receipt(OPERATION_ID)
             calls["download"].append({
@@ -41,8 +70,11 @@ def datahugger(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
             if state["fail"]:
                 raise RuntimeError(str(state["fail"]))
             (dst_dir / "files").mkdir(parents=True, exist_ok=True)
-            (dst_dir / "files" / "dataset.pdb").write_text("HEADER    FAKE\nEND\n")
-            (dst_dir / "info.txt").write_text("fake dataset\n")
+            (dst_dir / "files" / "dataset.pdb").write_text(PDB_CONTENT)
+            (dst_dir / "info.txt").write_text(INFO_CONTENT)
+            if state["download_block"] is not None:
+                state["download_block"].set()  # ty: ignore[unresolved-attribute]
+                state["download_release"].wait(timeout=15)  # ty: ignore[unresolved-attribute]
             return 2
 
     def fake_resolve(url: str) -> FakeDataset:
@@ -62,20 +94,92 @@ class TestWorker:
     """The worker stages the full repository and writes an atomic terminal receipt."""
 
     def test_success_writes_succeeded_receipt(self, datahugger: SimpleNamespace) -> None:
-        """A full download resolves the URL and writes a success receipt at the fixed concurrency."""
+        """A full download resolves, crawls the totals, and writes a success receipt."""
         assert worker.main(ARGS) == 0
 
         receipt = read_receipt(OPERATION_ID)
         assert receipt is not None
         assert receipt.state == "succeeded"
+        assert receipt.phase == "finalizing"
         assert receipt.error is None
+        # Pre-crawl totals are carried into the terminal receipt. The instant fake download
+        # leaves the final staging sample at zero because the sampler never ticks (2s interval).
+        assert receipt.files_total == 2
+        assert receipt.bytes_total == BYTES_TOTAL
+        assert receipt.files_present == 0
+        assert receipt.bytes_present == 0
 
         # The binding is driven with the approved concurrency, never its zero/unlimited default.
         assert datahugger.calls["resolve"] == ["https://github.com/test/dataset"]
+        assert len(datahugger.calls["crawl"]) == 1
         assert datahugger.calls["download"] == [
             {"dst_dir": staging_dir(OPERATION_ID), "limit": DOWNLOAD_CONCURRENCY, "receipt_state": "running"}
         ]
         assert (staging_dir(OPERATION_ID) / "files" / "dataset.pdb").is_file()
+
+    def test_live_progress_receipts_during_download(
+        self, datahugger: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """While the native download runs, staging samples are published as measured 'files present'."""
+        monkeypatch.setattr(worker, "PROGRESS_SAMPLE_INTERVAL_SECONDS", 0.05)
+        datahugger.state["download_block"] = threading.Event()
+        datahugger.state["download_release"] = threading.Event()
+        thread = threading.Thread(target=worker.main, args=(ARGS,), daemon=True)
+        thread.start()
+
+        progress = None
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            progress = read_receipt(OPERATION_ID)
+            if progress is not None and progress.state == "running" and progress.files_present >= 1:
+                break
+            time.sleep(0.02)
+        try:
+            assert progress is not None
+            assert progress.phase == "downloading"
+            assert progress.files_total == 2
+            assert progress.bytes_total == BYTES_TOTAL
+            assert 1 <= progress.files_present <= 2
+            assert 0 < progress.bytes_present <= BYTES_TOTAL
+        finally:
+            datahugger.state["download_release"].set()  # type: ignore[union-attr]
+            thread.join(timeout=15)
+        assert not thread.is_alive()
+
+        final = read_receipt(OPERATION_ID)
+        assert final is not None
+        assert final.state == "succeeded"
+        assert final.phase == "finalizing"
+
+    def test_unknown_file_sizes_keep_byte_total_unknown(self, datahugger: SimpleNamespace) -> None:
+        """A byte total is only published when every selected entry has a known size."""
+        entries = [
+            SimpleNamespace(name="a.pdb", downloadable=True, size=len(PDB_CONTENT)),
+            SimpleNamespace(name="b.xtc", downloadable=True, size=None),
+        ]
+        datahugger.state["crawl_entries"] = entries
+
+        assert worker.main(ARGS) == 0
+
+        receipt = read_receipt(OPERATION_ID)
+        assert receipt is not None
+        assert receipt.files_total == 2
+        assert receipt.bytes_total is None
+        assert receipt.files_present == 0
+        assert receipt.bytes_present == 0
+
+    def test_crawl_failure_fails_before_download(self, datahugger: SimpleNamespace) -> None:
+        """A pre-crawl failure fails the operation without starting a download."""
+        datahugger.state["crawl_error"] = "crawler fail: fail at writing to fs"
+
+        assert worker.main(ARGS) == 1
+
+        receipt = read_receipt(OPERATION_ID)
+        assert receipt is not None
+        assert receipt.state == "failed"
+        assert receipt.phase == "crawling"
+        assert receipt.error == ERROR_STORAGE
+        assert not datahugger.calls["download"]
 
     def test_concurrency_is_fixed(self) -> None:
         """The approved download concurrency is four."""

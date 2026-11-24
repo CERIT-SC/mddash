@@ -132,11 +132,11 @@ paths:
       description: 'Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
 
 
-        Datahugger-NG creation is asynchronous: it prepares the notebooks, queues a
+        Datahugger-NG creation is asynchronous: it prepares the notebooks, commits a
 
-        one-shot download worker, and returns the operation to follow instead of an
+        provisional experiment, queues a one-shot download worker, and returns the
 
-        experiment (the experiment appears only after the download succeeds).'
+        operation identifiers while the import progresses in the background.'
       operationId: createExperiment
       requestBody:
         content:
@@ -240,6 +240,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -264,6 +270,51 @@ paths:
           description: Operation completed successfully
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          description: RFC 9457 problem details
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /dash/api/experiments/{experiment_id}/population/cancel:
+    post:
+      tags:
+      - Experiments
+      summary: Cancel a Datahugger population
+      description: Stop an active Datahugger import after its worker is confirmed deleted.
+      operationId: cancelExperimentPopulation
+      parameters:
+      - name: experiment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          minLength: 1
+      responses:
+        '200':
+          description: Cancelled experiment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+        '404':
+          description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -358,6 +409,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -939,6 +996,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1009,6 +1072,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1056,6 +1125,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -1248,6 +1323,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1314,6 +1395,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -1544,6 +1631,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1623,6 +1716,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1654,6 +1753,12 @@ paths:
           description: Operation completed successfully
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -1821,6 +1926,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1903,6 +2014,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           description: RFC 9457 problem details
           content:
@@ -1927,6 +2044,12 @@ paths:
           description: Operation completed successfully
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -2008,6 +2131,12 @@ paths:
                 $ref: '#/components/schemas/Problem'
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -2303,6 +2432,12 @@ paths:
           description: Operation completed successfully
         '404':
           description: Resource not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Resource conflict
           content:
             application/problem+json:
               schema:
@@ -2736,6 +2871,10 @@ components:
           anyOf:
           - $ref: '#/components/schemas/Notebook'
           - type: 'null'
+        population:
+          anyOf:
+          - $ref: '#/components/schemas/Population'
+          - type: 'null'
         tuner_jobs:
           items:
             $ref: '#/components/schemas/TunerJob'
@@ -2786,6 +2925,7 @@ components:
       - latest_simulation_path
       - engine
       - notebook
+      - population
       - tuner_jobs
       - simulation_jobs
       - analysis_jobs
@@ -3344,6 +3484,46 @@ components:
       - TERMINATING
       - TERMINATED
       description: Status values for Kubernetes pods.
+    Population:
+      properties:
+        operation_id:
+          type: string
+        experiment_id:
+          type: string
+        status:
+          $ref: '#/components/schemas/PopulationStatus'
+        phase:
+          $ref: '#/components/schemas/PopulationPhase'
+        files_present:
+          type: integer
+        files_total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        bytes_present:
+          type: integer
+        bytes_total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        byte_percentage:
+          anyOf:
+          - type: number
+          - type: 'null'
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+      additionalProperties: false
+      type: object
+      required:
+      - operation_id
+      - experiment_id
+      - status
+      - phase
+      - files_present
+      - bytes_present
+      description: Population lifecycle embedded in an ordinary Experiment response.
     PopulationJob:
       properties:
         operation_id:
@@ -3367,8 +3547,38 @@ components:
           enum:
           - queued
           - running
+          - cancelling
           - succeeded
           - failed
+          - cancelled
+        phase:
+          anyOf:
+          - type: string
+            enum:
+            - starting
+            - crawling
+            - downloading
+            - finalizing
+            - cancelling
+          - type: 'null'
+        files_present:
+          type: integer
+          default: 0
+        files_total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        bytes_present:
+          type: integer
+          default: 0
+        bytes_total:
+          anyOf:
+          - type: integer
+          - type: 'null'
+        byte_percentage:
+          anyOf:
+          - type: number
+          - type: 'null'
         error:
           anyOf:
           - type: string
@@ -3379,7 +3589,26 @@ components:
       - operation_id
       - experiment_id
       - status
-      description: Read-only status of a Datahugger-NG population operation.
+      description: Read-only status of a Datahugger-NG population operation (legacy alias).
+    PopulationPhase:
+      type: string
+      enum:
+      - starting
+      - crawling
+      - downloading
+      - finalizing
+      - cancelling
+      description: Worker phase carried in the population receipt and linked operation (name == wire value).
+    PopulationStatus:
+      type: string
+      enum:
+      - queued
+      - running
+      - cancelling
+      - succeeded
+      - failed
+      - cancelled
+      description: Lifecycle of a Datahugger-NG population operation (member name == wire value).
     Problem:
       additionalProperties: false
       description: RFC 9457 problem details. The HTTP status is carried by the response status line.

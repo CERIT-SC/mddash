@@ -15,7 +15,7 @@ from core.enums import Engine, JobStatus
 from core.errors import ApiError, NotFound
 from fastapi import Depends
 
-from modules.experiments.dependencies import get_experiment_or_404
+from modules.experiments.dependencies import get_ready_experiment_or_404
 from modules.experiments.models import Experiment
 from modules.jobs.tuner.models import TunerJob
 from modules.simulations.manifest import Simulation
@@ -134,7 +134,7 @@ class TunerService:
         Raises:
             ApiError: If the tuner is unavailable (upstream-unavailable).
         """
-        experiment = await get_experiment_or_404(self._session, experiment_id)
+        experiment = await get_ready_experiment_or_404(self._session, experiment_id)
 
         existing = await self.find(experiment_id, simulation_path)
         if existing:
@@ -196,7 +196,8 @@ class TunerService:
         logger.info(f"Stopped tuner job {job.id}")
 
     async def stop_by_path(self, experiment_id: str, simulation_path: str) -> None:
-        """Stop the simulation's tuner job, keeping its observed trials."""
+        """Stop the simulation's tuner job, keeping its observed trials (guarded by the population gate)."""
+        await get_ready_experiment_or_404(self._session, experiment_id)
         await self.stop(await self.get(experiment_id, simulation_path))
         await self._session.commit()
 
@@ -207,7 +208,8 @@ class TunerService:
         await self._delete_on_tuner(job)
 
     async def delete(self, experiment_id: str, simulation_path: str) -> None:
-        """Delete the simulation's tuner job and its tuner-side resources."""
+        """Delete the simulation's tuner job and its tuner-side resources (guarded by the population gate)."""
+        await get_ready_experiment_or_404(self._session, experiment_id)
         job = await self.get(experiment_id, simulation_path)
         await self.delete_remote(job)
         await self._session.delete(job)

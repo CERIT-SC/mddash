@@ -11,6 +11,7 @@ from modules.jobs.analysis.schemas import AnalysisJob
 from modules.jobs.schemas import SimulationJob
 from modules.jobs.tuner.schemas import TunerJob
 from modules.notebooks.schemas import ModuleCategory, Notebook
+from modules.population.schemas import Population
 
 
 @with_config(ConfigDict(extra="forbid"))
@@ -44,6 +45,8 @@ class Experiment(OrmModel):
     mdrepo_published: bool | None = None
     engine: Engine
     notebook: Notebook | None
+    # Non-null only for Datahugger-NG experiments; succeeded no longer gates the normal UI.
+    population: Population | None
     tuner_jobs: list[TunerJob]
     simulation_jobs: list[SimulationJob]
     analysis_jobs: list[AnalysisJob]
