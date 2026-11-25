@@ -1,6 +1,6 @@
 import type { Population, PopulationPhase } from "@/api/generated/models"
 import { populationCounters } from "@/shared/population-state"
-import { Progress } from "@e-infra/design-system"
+import { Alert, AlertDescription, AlertTitle, Progress } from "@e-infra/design-system"
 import { LoaderCircle } from "lucide-react"
 
 const PHASE_LABELS: Record<PopulationPhase, string> = {
@@ -24,6 +24,12 @@ export function PopulationProgress({ population }: { population: Population }) {
 
   return (
     <div className="space-y-2" aria-live="polite">
+      {population.status === "cancelling" && population.error && (
+        <Alert variant="error">
+          <AlertTitle>Cancellation not finished</AlertTitle>
+          <AlertDescription>{population.error}</AlertDescription>
+        </Alert>
+      )}
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="flex items-center gap-2">
           <LoaderCircle className="text-text-muted h-4 w-4 animate-spin" aria-hidden="true" />

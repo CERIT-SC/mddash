@@ -89,6 +89,18 @@ describe("ExperimentWizard population gate", () => {
     expect(screen.queryByText(/section 1 of 5/i)).not.toBeInTheDocument()
   })
 
+  it("keeps a failed cancellation visible with its retry", async () => {
+    await renderPopulationWizard({
+      status: "cancelling",
+      phase: "cancelling",
+      error: "The repository download could not be cancelled yet. Try the cancellation again.",
+    })
+
+    expect(await screen.findByText("Cancellation not finished")).toBeInTheDocument()
+    expect(screen.getByText(/could not be cancelled yet/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /cancel import/i })).toBeInTheDocument()
+  })
+
   it("lists dataset files renamed by the import above the wizard", async () => {
     mockApiBySuffix({
       "/experiments/exp1/simulations": Response.json([simulation(SIM, { valid: true })]),
