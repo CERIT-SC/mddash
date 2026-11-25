@@ -306,6 +306,18 @@ def test_migration_012_adds_segment_progress_and_live_uniqueness(tmp_path: Path)
     assert live_index.get("dialect_options", {}).get("sqlite_where") is not None
 
 
+def test_migration_015_creates_owned_population_operations(tmp_path: Path) -> None:
+    """Operations are owned one-to-one by an experiment and are removed with it."""
+    app = _MigratedDb(tmp_path / "test.db")
+    _upgrade_to(app, "015")
+
+    indexes = {ix["name"]: ix for ix in sa_inspect(app.engine).get_indexes("population_operations")}
+    assert indexes["ix_population_operations_experiment_id"]["unique"]
+    (fk,) = sa_inspect(app.engine).get_foreign_keys("population_operations")
+    assert fk["referred_table"] == "experiments"
+    assert fk["options"].get("ondelete") == "CASCADE"
+
+
 def test_migration_014_collapses_to_one_run_per_simulation(tmp_path: Path) -> None:
     """At head: one run row per simulation path, no segment history columns or index."""
     app = _MigratedDb(tmp_path / "test.db")

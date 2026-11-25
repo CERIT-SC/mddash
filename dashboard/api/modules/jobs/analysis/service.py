@@ -17,6 +17,7 @@ from core.enums import AnalysisType, Engine, JobStatus, PreprocessingMode
 from core.errors import BadRequest, Forbidden, NotFound
 from fastapi import Depends
 
+from modules.experiments.dependencies import get_ready_experiment_or_404
 from modules.experiments.models import Experiment
 from modules.jobs.analysis.command import format_mwf_analysis_command
 from modules.jobs.analysis.models import AnalysisJob
@@ -194,7 +195,8 @@ class AnalysisService:
         await anyio.to_thread.run_sync(job.cleanup_temp_files)
 
     async def delete(self, experiment_id: str, job_id: str) -> None:
-        """Delete an analysis job and its temporary files."""
+        """Delete an analysis job and its temporary files (guarded by the population gate)."""
+        await get_ready_experiment_or_404(self._session, experiment_id)
         job = await self.get(experiment_id, job_id, refresh=False)
         await self.delete_remote(job)
         await self._session.delete(job)

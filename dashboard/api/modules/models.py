@@ -7,6 +7,7 @@ from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.models import SimulationJob
 from modules.jobs.tuner.models import TunerJob
 from modules.notebooks.models import Notebook
+from modules.population.models import PopulationOperation
 from modules.simulations.manifest import Simulation
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "Experiment",
     "GromacsJob",
     "Notebook",
+    "PopulationOperation",
     "Simulation",
     "SimulationJob",
     "TunerJob",

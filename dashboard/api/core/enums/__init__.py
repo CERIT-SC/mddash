@@ -6,6 +6,8 @@ from core.enums.engine import AmberBinary, Engine, EwaldPreset
 from core.enums.job_status import JobStatus
 from core.enums.notebook_tier import NotebookTier
 from core.enums.pod_status import PodStatus
+from core.enums.population_phase import PopulationPhase
+from core.enums.population_status import PopulationStatus
 from core.enums.preprocessing_mode import PreprocessingMode
 from core.enums.source_type import SourceType
 
@@ -18,6 +20,8 @@ __all__ = [
     "JobStatus",
     "NotebookTier",
     "PodStatus",
+    "PopulationPhase",
+    "PopulationStatus",
     "PreprocessingMode",
     "SourceType",
 ]

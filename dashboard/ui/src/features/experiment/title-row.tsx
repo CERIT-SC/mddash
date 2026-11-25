@@ -33,7 +33,7 @@ function shortRepo(repo: string): string {
   }
 }
 
-export function TitleRow({ experiment }: { experiment: Experiment }) {
+export function TitleRow({ experiment, readOnly = false }: { experiment: Experiment; readOnly?: boolean }) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
   const [nextName, setNextName] = useState(experiment.name)
@@ -86,16 +86,21 @@ export function TitleRow({ experiment }: { experiment: Experiment }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <H1>Experiment</H1>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={openRename}
-        aria-label="Rename experiment"
-        className="max-w-full min-w-0"
-      >
-        <span className="truncate">{experiment.name}</span>
-        <Pencil aria-hidden="true" className="shrink-0" />
-      </Button>
+      {readOnly ? (
+        // No rename control while the import owns the experiment.
+        <span className="text-text max-w-full truncate">{experiment.name}</span>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={openRename}
+          aria-label="Rename experiment"
+          className="max-w-full min-w-0"
+        >
+          <span className="truncate">{experiment.name}</span>
+          <Pencil aria-hidden="true" className="shrink-0" />
+        </Button>
+      )}
       {items.length > 0 && <span className="bg-border h-8 w-px" aria-hidden="true" />}
       <div className="text-text-muted flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         {items.map((item, index) => (

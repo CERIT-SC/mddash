@@ -49,12 +49,21 @@ function isGitUrl(url: string): boolean {
   }
 }
 
+/** Public http(s) URL: Datahugger-NG fetches it unauthenticated. */
+function isHttpUrl(url: string): boolean {
+  try {
+    return ["http:", "https:"].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
 function buildSchema(requireRepo: boolean) {
   return z
     .object({
       name: z.string().trim().min(1, "Enter a name for the experiment"),
       engine: z.enum(["GMX", "AMBER"]),
-      source: z.enum(["pdb", "file", "repo"]),
+      source: z.enum(["pdb", "file", "repo", "datahugger"]),
       pdb: z.string(),
       repoUrl: z.string(),
       notebooksRepo: z.string(),
@@ -67,6 +76,9 @@ function buildSchema(requireRepo: boolean) {
       }
       if (values.source === "repo" && values.repoUrl.trim() === "") {
         ctx.addIssue({ code: "custom", path: ["repoUrl"], message: "Enter a DOI or repository URL" })
+      }
+      if (values.source === "datahugger" && !isHttpUrl(values.repoUrl.trim())) {
+        ctx.addIssue({ code: "custom", path: ["repoUrl"], message: "Enter a valid http(s) repository URL" })
       }
       if (values.source === "file" && values.files.length === 0) {
         ctx.addIssue({ code: "custom", path: ["files"], message: "Add at least one file" })
@@ -171,10 +183,13 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
   const create = useCreateExperiment({
     mutation: {
       onSuccess: (response) => {
-        toast.success(`Experiment “${response.data.name}” created`)
         void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
         onClose()
-        void navigate({ to: "/experiments/$experimentId", params: { experimentId: response.data.id } })
+        // A 202 is the provisional experiment already being populated; its progress
+        // and any later failure live on the experiment page, not in this dialog.
+        const experimentId = response.status === 202 ? response.data.experiment_id : response.data.id
+        if (response.status !== 202) toast.success(`Experiment “${response.data.name}” created`)
+        void navigate({ to: "/experiments/$experimentId", params: { experimentId } })
       },
       onError: (error) => toast.error(toApiError(error).message),
     },
@@ -183,7 +198,7 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
   function onSubmit(values: FormValues) {
     const data: CreateExperimentForm = { "experiment-name": values.name.trim(), type: values.source }
     if (values.source === "pdb") data.pdb = values.pdb.trim()
-    if (values.source === "repo") data["repo-url"] = values.repoUrl.trim()
+    if (values.source === "repo" || values.source === "datahugger") data["repo-url"] = values.repoUrl.trim()
     if (values.source === "file") data["simulation-files"] = values.files
     if (isCustom) {
       const repo = values.notebooksRepo.trim()
@@ -279,6 +294,7 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                         <TabsTrigger value="pdb">PDB</TabsTrigger>
                         <TabsTrigger value="file">Upload Files</TabsTrigger>
                         <TabsTrigger value="repo">DOI / Repository</TabsTrigger>
+                        <TabsTrigger value="datahugger">Datahugger-NG</TabsTrigger>
                       </TabsList>
                     </Tabs>
                   </FormControl>
@@ -332,6 +348,25 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                     <FormControl>
                       <UploadField value={field.value} onChange={field.onChange} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+            {source === "datahugger" && (
+              <FormField
+                control={form.control}
+                name="repoUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Repository URL</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. https://github.com/owner/dataset" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      A public repository recognized by Datahugger-NG. The experiment opens immediately; the full
+                      repository is downloaded in the background and its progress is shown on the experiment page.
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

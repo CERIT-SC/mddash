@@ -32,7 +32,7 @@ async def list_jobs(
     summary="Stop an AMBER run, preserving its data",
     operation_id="stopAmberJob",
     response_description="Operation completed successfully",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def stop_job(service: AmberServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
     """Stop the run gracefully, keeping all data and the job row."""
@@ -124,7 +124,7 @@ async def submit_job(
     summary="Delete an AMBER job",
     operation_id="deleteAmberJob",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def delete_job(
     service: AmberServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath

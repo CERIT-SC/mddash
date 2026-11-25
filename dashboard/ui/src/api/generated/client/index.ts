@@ -61,6 +61,8 @@ import type {
   Notebook,
   NotebookConfig,
   NotebookModule,
+  PopulationJob,
+  PopulationOperationStatus,
   Problem,
   PublishRequest,
   PublishStatus,
@@ -900,6 +902,11 @@ export type createExperimentResponse201 = {
   status: 201
 }
 
+export type createExperimentResponse202 = {
+  data: PopulationJob
+  status: 202
+}
+
 export type createExperimentResponse400 = {
   data: Problem
   status: 400
@@ -907,10 +914,10 @@ export type createExperimentResponse400 = {
 
 export type createExperimentResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 400>
+  status: Exclude<HTTPStatusCodes, 201 | 202 | 400>
 }
 
-export type createExperimentResponseSuccess = (createExperimentResponse201) & {
+export type createExperimentResponseSuccess = (createExperimentResponse201 | createExperimentResponse202) & {
   headers: Headers;
 };
 export type createExperimentResponseError = (createExperimentResponse400 | createExperimentResponseDefault) & {
@@ -926,7 +933,11 @@ export const getCreateExperimentUrl = () => {
 }
 
 /**
- * Create a new experiment from PDB, repository URL, or uploaded files.
+ * Create a new experiment from PDB, repository URL, uploaded files, or Datahugger-NG.
+ *
+ * Datahugger-NG creation is asynchronous: it prepares the notebooks, commits a
+ * provisional experiment, queues a one-shot download worker, and returns the
+ * operation identifiers while the import progresses in the background.
  * @summary Create an experiment
  */
 export const createExperiment = async (createExperimentForm: CreateExperimentForm, options?: RequestInit): Promise<createExperimentResponseSuccess> => {
@@ -1185,15 +1196,20 @@ export type updateExperimentResponse404 = {
   status: 404
 }
 
+export type updateExperimentResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type updateExperimentResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 200 | 400 | 404 | 409>
 }
 
 export type updateExperimentResponseSuccess = (updateExperimentResponse200) & {
   headers: Headers;
 };
-export type updateExperimentResponseError = (updateExperimentResponse400 | updateExperimentResponse404 | updateExperimentResponseDefault) & {
+export type updateExperimentResponseError = (updateExperimentResponse400 | updateExperimentResponse404 | updateExperimentResponse409 | updateExperimentResponseDefault) & {
   headers: Headers;
 };
 
@@ -1312,15 +1328,20 @@ export type deleteExperimentResponse404 = {
   status: 404
 }
 
+export type deleteExperimentResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteExperimentResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type deleteExperimentResponseSuccess = (deleteExperimentResponse204) & {
   headers: Headers;
 };
-export type deleteExperimentResponseError = (deleteExperimentResponse404 | deleteExperimentResponseDefault) & {
+export type deleteExperimentResponseError = (deleteExperimentResponse404 | deleteExperimentResponse409 | deleteExperimentResponseDefault) & {
   headers: Headers;
 };
 
@@ -1414,6 +1435,265 @@ export const useDeleteExperiment = <TError = globalThis.Error & { info?: Problem
       return useMutation(getDeleteExperimentMutationOptions(options), queryClient);
     }
 
+export type cancelExperimentPopulationResponse200 = {
+  data: Experiment
+  status: 200
+}
+
+export type cancelExperimentPopulationResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type cancelExperimentPopulationResponse409 = {
+  data: Problem
+  status: 409
+}
+
+export type cancelExperimentPopulationResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404 | 409>
+}
+
+export type cancelExperimentPopulationResponseSuccess = (cancelExperimentPopulationResponse200) & {
+  headers: Headers;
+};
+export type cancelExperimentPopulationResponseError = (cancelExperimentPopulationResponse404 | cancelExperimentPopulationResponse409 | cancelExperimentPopulationResponseDefault) & {
+  headers: Headers;
+};
+
+export const getCancelExperimentPopulationUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/population/cancel`
+}
+
+/**
+ * Stop an active Datahugger import after its worker is confirmed deleted.
+ * @summary Cancel a Datahugger population
+ */
+export const cancelExperimentPopulation = async (experimentId: string, options?: RequestInit): Promise<cancelExperimentPopulationResponseSuccess> => {
+
+  const res = await fetch(getCancelExperimentPopulationUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: cancelExperimentPopulationResponseError['data'], status?: number} = new globalThis.Error();
+    const data : cancelExperimentPopulationResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: cancelExperimentPopulationResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as cancelExperimentPopulationResponseSuccess
+}
+
+
+
+
+
+export const getCancelExperimentPopulationMutationKey = () => ['cancelExperimentPopulation'] as const;
+
+export const getCancelExperimentPopulationMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelExperimentPopulation>>, TError,CancelExperimentPopulationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelExperimentPopulation>>, TError,CancelExperimentPopulationMutationVariables, TContext> => {
+
+const mutationKey = getCancelExperimentPopulationMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelExperimentPopulation>>, CancelExperimentPopulationMutationVariables> = (props) => {
+          const {experimentId} = props ?? {};
+
+          return  cancelExperimentPopulation(experimentId,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelExperimentPopulationMutationResult = NonNullable<Awaited<ReturnType<typeof cancelExperimentPopulation>>>
+
+    export type CancelExperimentPopulationMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type CancelExperimentPopulationMutationVariables = {experimentId: string}
+
+    /**
+ * @summary Cancel a Datahugger population
+ */
+export const useCancelExperimentPopulation = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelExperimentPopulation>>, TError,CancelExperimentPopulationMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof cancelExperimentPopulation>>,
+        TError,
+        CancelExperimentPopulationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCancelExperimentPopulationMutationOptions(options), queryClient);
+    }
+
+export type getExperimentPopulationJobResponse200 = {
+  data: PopulationOperationStatus
+  status: 200
+}
+
+export type getExperimentPopulationJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getExperimentPopulationJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getExperimentPopulationJobResponseSuccess = (getExperimentPopulationJobResponse200) & {
+  headers: Headers;
+};
+export type getExperimentPopulationJobResponseError = (getExperimentPopulationJobResponse404 | getExperimentPopulationJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetExperimentPopulationJobUrl = (operationId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiment-population-jobs/${operationId}`
+}
+
+/**
+ * Read-only status of a Datahugger-NG population operation.
+ *
+ * Reconciliation (finalization and failure handling) is owned by the app
+ * lifespan monitor; this endpoint never mutates state.
+ * @summary Get a population operation
+ */
+export const getExperimentPopulationJob = async (operationId: string, options?: RequestInit): Promise<getExperimentPopulationJobResponseSuccess> => {
+
+  const res = await fetch(getGetExperimentPopulationJobUrl(operationId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getExperimentPopulationJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getExperimentPopulationJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getExperimentPopulationJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getExperimentPopulationJobResponseSuccess
+}
+
+
+
+
+
+export const getGetExperimentPopulationJobQueryKey = (operationId: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiment-population-jobs/${operationId}`
+    ] as const;
+    }
+
+
+export const getGetExperimentPopulationJobQueryOptions = <TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetExperimentPopulationJobQueryKey(operationId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getExperimentPopulationJob>>> = ({ signal }) => getExperimentPopulationJob(operationId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: operationId !== null && operationId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetExperimentPopulationJobQueryResult = NonNullable<Awaited<ReturnType<typeof getExperimentPopulationJob>>>
+export type GetExperimentPopulationJobQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>,
+          TError,
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>,
+          TError,
+          Awaited<ReturnType<typeof getExperimentPopulationJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a population operation
+ */
+
+export function useGetExperimentPopulationJob<TData = Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ operationId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperimentPopulationJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetExperimentPopulationJobQueryOptions(operationId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export type publishExperimentResponse201 = {
   data: MDPositPublication
   status: 201
@@ -1439,15 +1719,20 @@ export type publishExperimentResponse404 = {
   status: 404
 }
 
+export type publishExperimentResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type publishExperimentResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 202 | 400 | 401 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 202 | 400 | 401 | 404 | 409>
 }
 
 export type publishExperimentResponseSuccess = (publishExperimentResponse201 | publishExperimentResponse202) & {
   headers: Headers;
 };
-export type publishExperimentResponseError = (publishExperimentResponse400 | publishExperimentResponse401 | publishExperimentResponse404 | publishExperimentResponseDefault) & {
+export type publishExperimentResponseError = (publishExperimentResponse400 | publishExperimentResponse401 | publishExperimentResponse404 | publishExperimentResponse409 | publishExperimentResponseDefault) & {
   headers: Headers;
 };
 
@@ -3479,15 +3764,20 @@ export type deleteSimulationResponse404 = {
   status: 404
 }
 
+export type deleteSimulationResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteSimulationResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 400 | 404 | 409>
 }
 
 export type deleteSimulationResponseSuccess = (deleteSimulationResponse204) & {
   headers: Headers;
 };
-export type deleteSimulationResponseError = (deleteSimulationResponse400 | deleteSimulationResponse404 | deleteSimulationResponseDefault) & {
+export type deleteSimulationResponseError = (deleteSimulationResponse400 | deleteSimulationResponse404 | deleteSimulationResponse409 | deleteSimulationResponseDefault) & {
   headers: Headers;
 };
 
@@ -3732,15 +4022,20 @@ export type stopGromacsJobResponse404 = {
   status: 404
 }
 
+export type stopGromacsJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type stopGromacsJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 400 | 404 | 409>
 }
 
 export type stopGromacsJobResponseSuccess = (stopGromacsJobResponse204) & {
   headers: Headers;
 };
-export type stopGromacsJobResponseError = (stopGromacsJobResponse400 | stopGromacsJobResponse404 | stopGromacsJobResponseDefault) & {
+export type stopGromacsJobResponseError = (stopGromacsJobResponse400 | stopGromacsJobResponse404 | stopGromacsJobResponse409 | stopGromacsJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -3851,15 +4146,20 @@ export type extendGromacsJobResponse404 = {
   status: 404
 }
 
+export type extendGromacsJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type extendGromacsJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
 export type extendGromacsJobResponseSuccess = (extendGromacsJobResponse201) & {
   headers: Headers;
 };
-export type extendGromacsJobResponseError = (extendGromacsJobResponse400 | extendGromacsJobResponse404 | extendGromacsJobResponseDefault) & {
+export type extendGromacsJobResponseError = (extendGromacsJobResponse400 | extendGromacsJobResponse404 | extendGromacsJobResponse409 | extendGromacsJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -4433,15 +4733,20 @@ export type deleteGromacsJobResponse404 = {
   status: 404
 }
 
+export type deleteGromacsJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteGromacsJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type deleteGromacsJobResponseSuccess = (deleteGromacsJobResponse204) & {
   headers: Headers;
 };
-export type deleteGromacsJobResponseError = (deleteGromacsJobResponse404 | deleteGromacsJobResponseDefault) & {
+export type deleteGromacsJobResponseError = (deleteGromacsJobResponse404 | deleteGromacsJobResponse409 | deleteGromacsJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -4686,15 +4991,20 @@ export type stopAmberJobResponse404 = {
   status: 404
 }
 
+export type stopAmberJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type stopAmberJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 400 | 404 | 409>
 }
 
 export type stopAmberJobResponseSuccess = (stopAmberJobResponse204) & {
   headers: Headers;
 };
-export type stopAmberJobResponseError = (stopAmberJobResponse400 | stopAmberJobResponse404 | stopAmberJobResponseDefault) & {
+export type stopAmberJobResponseError = (stopAmberJobResponse400 | stopAmberJobResponse404 | stopAmberJobResponse409 | stopAmberJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -5365,15 +5675,20 @@ export type deleteAmberJobResponse404 = {
   status: 404
 }
 
+export type deleteAmberJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteAmberJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type deleteAmberJobResponseSuccess = (deleteAmberJobResponse204) & {
   headers: Headers;
 };
-export type deleteAmberJobResponseError = (deleteAmberJobResponse404 | deleteAmberJobResponseDefault) & {
+export type deleteAmberJobResponseError = (deleteAmberJobResponse404 | deleteAmberJobResponse409 | deleteAmberJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -5623,15 +5938,20 @@ export type startTunerJobResponse404 = {
   status: 404
 }
 
+export type startTunerJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type startTunerJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 200 | 201 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 200 | 201 | 400 | 404 | 409>
 }
 
 export type startTunerJobResponseSuccess = (startTunerJobResponse200 | startTunerJobResponse201) & {
   headers: Headers;
 };
-export type startTunerJobResponseError = (startTunerJobResponse400 | startTunerJobResponse404 | startTunerJobResponseDefault) & {
+export type startTunerJobResponseError = (startTunerJobResponse400 | startTunerJobResponse404 | startTunerJobResponse409 | startTunerJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -5750,15 +6070,20 @@ export type stopTunerJobResponse404 = {
   status: 404
 }
 
+export type stopTunerJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type stopTunerJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type stopTunerJobResponseSuccess = (stopTunerJobResponse204) & {
   headers: Headers;
 };
-export type stopTunerJobResponseError = (stopTunerJobResponse404 | stopTunerJobResponseDefault) & {
+export type stopTunerJobResponseError = (stopTunerJobResponse404 | stopTunerJobResponse409 | stopTunerJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -6321,15 +6646,20 @@ export type deleteTunerJobResponse404 = {
   status: 404
 }
 
+export type deleteTunerJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteTunerJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type deleteTunerJobResponseSuccess = (deleteTunerJobResponse204) & {
   headers: Headers;
 };
-export type deleteTunerJobResponseError = (deleteTunerJobResponse404 | deleteTunerJobResponseDefault) & {
+export type deleteTunerJobResponseError = (deleteTunerJobResponse404 | deleteTunerJobResponse409 | deleteTunerJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -6584,15 +6914,20 @@ export type startNotebookResponse404 = {
   status: 404
 }
 
+export type startNotebookResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type startNotebookResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 403 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 403 | 404 | 409>
 }
 
 export type startNotebookResponseSuccess = (startNotebookResponse201) & {
   headers: Headers;
 };
-export type startNotebookResponseError = (startNotebookResponse400 | startNotebookResponse403 | startNotebookResponse404 | startNotebookResponseDefault) & {
+export type startNotebookResponseError = (startNotebookResponse400 | startNotebookResponse403 | startNotebookResponse404 | startNotebookResponse409 | startNotebookResponseDefault) & {
   headers: Headers;
 };
 
@@ -6711,15 +7046,20 @@ export type stopNotebookResponse404 = {
   status: 404
 }
 
+export type stopNotebookResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type stopNotebookResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type stopNotebookResponseSuccess = (stopNotebookResponse204) & {
   headers: Headers;
 };
-export type stopNotebookResponseError = (stopNotebookResponse404 | stopNotebookResponseDefault) & {
+export type stopNotebookResponseError = (stopNotebookResponse404 | stopNotebookResponse409 | stopNotebookResponseDefault) & {
   headers: Headers;
 };
 
@@ -6977,15 +7317,20 @@ export type submitAnalysisJobResponse404 = {
   status: 404
 }
 
+export type submitAnalysisJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type submitAnalysisJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
 export type submitAnalysisJobResponseSuccess = (submitAnalysisJobResponse201) & {
   headers: Headers;
 };
-export type submitAnalysisJobResponseError = (submitAnalysisJobResponse400 | submitAnalysisJobResponse404 | submitAnalysisJobResponseDefault) & {
+export type submitAnalysisJobResponseError = (submitAnalysisJobResponse400 | submitAnalysisJobResponse404 | submitAnalysisJobResponse409 | submitAnalysisJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -8035,15 +8380,20 @@ export type deleteAnalysisJobResponse404 = {
   status: 404
 }
 
+export type deleteAnalysisJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
 export type deleteAnalysisJobResponseDefault = {
   data: Problem
-  status: Exclude<HTTPStatusCodes, 204 | 404>
+  status: Exclude<HTTPStatusCodes, 204 | 404 | 409>
 }
 
 export type deleteAnalysisJobResponseSuccess = (deleteAnalysisJobResponse204) & {
   headers: Headers;
 };
-export type deleteAnalysisJobResponseError = (deleteAnalysisJobResponse404 | deleteAnalysisJobResponseDefault) & {
+export type deleteAnalysisJobResponseError = (deleteAnalysisJobResponse404 | deleteAnalysisJobResponse409 | deleteAnalysisJobResponseDefault) & {
   headers: Headers;
 };
 

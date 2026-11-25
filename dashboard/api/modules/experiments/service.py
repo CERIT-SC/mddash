@@ -14,7 +14,7 @@ from clients import mdposit
 from core.concurrency import gather
 from core.config import DATA_DIR, DEFAULT_NOTEBOOKS_REPO
 from core.dependencies import ClientsDep, SessionDep
-from core.enums import Engine, SourceType
+from core.enums import Engine, PopulationStatus, SourceType
 from core.errors import ApiError, BadRequest, Conflict, NotFound
 from core.utils import get_unique_id, secure_filename
 from core.validators import validate_git_url, validate_http_url
@@ -35,6 +35,9 @@ from modules.mdrepo.tokens import MDRepoTokenManager
 from modules.notebooks.catalog import NotebookModule, load_catalog
 from modules.notebooks.models import Notebook
 from modules.notebooks.service import NotebookService
+from modules.population.models import PopulationOperation
+from modules.population.receipt import operation_dir
+from modules.population.service import PopulationService
 from modules.publishing.service import PublishingService, needs_mdrepo_sync
 from modules.publishing.status import UploadState
 
@@ -56,6 +59,7 @@ class ExperimentService:
         self.notebooks = NotebookService(clients)
         self.publishing = PublishingService(session, clients)
         self.archive = ArchiveService(session, clients)
+        self.population = PopulationService(session, clients)
 
     # --- reads ----------------------------------------------------------------------
 
@@ -111,6 +115,31 @@ class ExperimentService:
         Raises:
             BadRequest: If the notebook module, repository, or source data is invalid.
         """
+        repo, access_token, module = self._resolve_notebooks(notebooks_repo, access_token, notebook_module_id, engine)
+
+        match source_type:
+            case "pdb" if pdb:
+                return await self.from_pdb(name, pdb, repo, access_token, engine=engine, notebook_module=module)
+            case "repo" if repo_url:
+                return await self.from_repo(name, repo_url, repo, access_token, engine=engine, notebook_module=module)
+            case "file" if files:
+                return await self.from_files(name, files, repo, access_token, engine=engine, notebook_module=module)
+            case _:
+                raise BadRequest("Invalid experiment type or missing data.")
+
+    def _resolve_notebooks(
+        self,
+        notebooks_repo: str | None,
+        access_token: str | None,
+        notebook_module_id: str | None,
+        engine: Engine,
+    ) -> tuple[str, str | None, NotebookModule | None]:
+        """
+        Resolve (notebooks repo, access token, curated module) for a creation.
+
+        Raises:
+            BadRequest: If the notebook module or repository is invalid.
+        """
         repo = notebooks_repo if notebooks_repo is not None else DEFAULT_NOTEBOOKS_REPO
         module = None
         if notebook_module_id:
@@ -126,16 +155,7 @@ class ExperimentService:
             access_token = None
         else:
             validate_git_url(repo)
-
-        match source_type:
-            case "pdb" if pdb:
-                return await self.from_pdb(name, pdb, repo, access_token, engine=engine, notebook_module=module)
-            case "repo" if repo_url:
-                return await self.from_repo(name, repo_url, repo, access_token, engine=engine, notebook_module=module)
-            case "file" if files:
-                return await self.from_files(name, files, repo, access_token, engine=engine, notebook_module=module)
-            case _:
-                raise BadRequest("Invalid experiment type or missing data.")
+        return repo, access_token, module
 
     async def prepare_env(
         self, notebooks_repo: str, access_token: str | None = None, notebook_module: NotebookModule | None = None
@@ -169,12 +189,15 @@ class ExperimentService:
         try:
             columns.update(await populate(experiment_id))
             # Empty collections up front: the new row must never lazy-load them later.
+            # population is a scalar (uselist=False); an explicit None keeps it from lazy-loading
+            # when the freshly created row is serialized before it is ever SELECTed.
             experiment = Experiment(
                 id=experiment_id,
                 notebook=Notebook(experiment_id=experiment_id),
                 tuner_jobs=[],
                 simulation_jobs=[],
                 analysis_jobs=[],
+                population=None,
                 **columns,
             )
             self._session.add(experiment)
@@ -301,6 +324,47 @@ class ExperimentService:
             experiment_id, populate, name=name, **self._module_columns(engine, notebooks_repo, notebook_module)
         )
 
+    async def create_population(
+        self,
+        name: str,
+        dataset_url: str,
+        *,
+        notebooks_repo: str | None = None,
+        access_token: str | None = None,
+        notebook_module_id: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> PopulationOperation:
+        """
+        Create a provisional experiment populated by Datahugger-NG in the background.
+
+        Notebooks are prepared synchronously (a custom notebook access token is
+        consumed by that clone only, never persisted). The provisional Experiment
+        is committed with its queued population and the one-shot worker; only the
+        safe merge remains background work.
+
+        Invalid inputs raise ``BadRequest`` (see ``validate_http_url`` and
+        ``_resolve_notebooks``); a worker submission failure raises ``ApiError``
+        (upstream-unavailable, see ``population.submit``).
+        """
+        url = validate_http_url(dataset_url)
+        repo, access_token, module = self._resolve_notebooks(notebooks_repo, access_token, notebook_module_id, engine)
+        experiment_id = await self.prepare_env(repo, access_token, module)
+        try:
+            return await self.population.submit(
+                experiment_id=experiment_id,
+                name=name,
+                repo_url=url,
+                notebooks_repo=repo,
+                engine=engine,
+                module_name=module.name if module else None,
+                module_category=module.category if module else None,
+            )
+        except BaseException:
+            # No committed row owns the prepared notebooks; shielded so a cancelled request still removes them.
+            with anyio.CancelScope(shield=True):
+                await anyio.to_thread.run_sync(lambda: rmtree(DATA_DIR / experiment_id, ignore_errors=True))
+            raise
+
     # --- changes --------------------------------------------------------------------
 
     async def rename(self, experiment: Experiment, name: str) -> None:
@@ -313,13 +377,22 @@ class ExperimentService:
         Delete an experiment with all its resources.
 
         Raises:
-            Conflict: If an MDRepo upload is queued or running.
+            Conflict: If an MDRepo upload is queued or running, or a Datahugger import is still active.
         """
         # Reject deletion while an upload is active (check PVC + live Job).
         if await self.publishing.upload_state(experiment.id) in UploadState.active():
             raise Conflict(
                 "Cannot delete experiment during active MDRepo upload. Wait for completion or retry after failure."
             )
+        # Reject deletion while a population worker can still write; terminal populations may be deleted.
+        population = experiment.population
+        if population is not None and population.status in PopulationStatus.cancellable():
+            raise Conflict(
+                "Cannot delete an experiment while its Datahugger import is active. Cancel the import or wait for it to finish."
+            )
+        # Terminal population staging is no longer written; remove any residue before the directory disappears.
+        if population is not None:
+            await anyio.to_thread.run_sync(lambda: rmtree(operation_dir(population.id), ignore_errors=True))
         # Delete wins over in-flight archive/restore work; the archive prefix is purged after.
         await self.archive.delete_jobs(experiment.id)
         needs_purge = experiment.archived_at is not None or experiment.archived_step is not None

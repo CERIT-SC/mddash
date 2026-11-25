@@ -12,6 +12,7 @@ from core.enums import JobStatus
 from core.errors import BadRequest, Conflict, NotFound
 from sqlalchemy.exc import IntegrityError
 
+from modules.experiments.dependencies import get_ready_experiment_or_404
 from modules.jobs.models import SimulationJob
 from modules.jobs.status import refresh_recorded
 from modules.simulations.manifest import Simulation
@@ -99,6 +100,7 @@ class RunService[J: SimulationJob]:
         Raises:
             NotFound: If the simulation never ran.
         """
+        await get_ready_experiment_or_404(self._session, experiment_id)
         if not await self.remove(experiment_id, simulation_path):
             raise NotFound(f"{self.label} job for simulation {simulation_path} in experiment {experiment_id} not found")
 
@@ -111,6 +113,7 @@ class RunService[J: SimulationJob]:
         Raises:
             BadRequest: If the run is not live.
         """
+        await get_ready_experiment_or_404(self._session, experiment_id)
         job = await self.get(experiment_id, simulation_path)
         if not job.is_live:
             raise BadRequest("Only a live run can be stopped.")

@@ -6,7 +6,7 @@ from core.errors import NotFound
 from core.responses import problems
 from fastapi import APIRouter, Response
 
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ExperimentDep, ReadyExperimentDep
 from modules.experiments.models import Experiment
 from modules.notebooks.models import Notebook
 from modules.notebooks.schemas import Notebook as NotebookOut
@@ -42,11 +42,11 @@ async def get_notebook(session: SessionDep, experiment: ExperimentDep, service: 
     summary="Start an experiment notebook",
     operation_id="startNotebook",
     response_description="Started notebook",
-    responses=problems(400, 403, 404),
+    responses=problems(400, 403, 404, 409),
 )
 async def start_notebook(
     session: SessionDep,
-    experiment: ExperimentDep,
+    experiment: ReadyExperimentDep,
     service: NotebookServiceDep,
     body: StartNotebookRequest | None = None,
 ) -> NotebookOut:
@@ -65,8 +65,8 @@ async def start_notebook(
     summary="Stop an experiment notebook",
     operation_id="stopNotebook",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
-async def stop_notebook(experiment: ExperimentDep, service: NotebookServiceDep) -> None:
+async def stop_notebook(experiment: ReadyExperimentDep, service: NotebookServiceDep) -> None:
     """Stop the notebook pod of an experiment."""
     await service.stop(_notebook(experiment))

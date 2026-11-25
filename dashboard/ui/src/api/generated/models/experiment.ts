@@ -11,6 +11,7 @@ import type { ExperimentArchiveState } from './experimentArchiveState.ts';
 import type { ExperimentSource } from './experimentSource.ts';
 import type { Notebook } from './notebook.ts';
 import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
+import type { Population } from './population.ts';
 import type { SimulationJob } from './simulationJob.ts';
 import type { TunerJob } from './tunerJob.ts';
 
@@ -32,6 +33,7 @@ export interface Experiment {
   mdrepo_published?: boolean | null;
   engine: Engine;
   notebook: Notebook | null;
+  population: Population | null;
   tuner_jobs: TunerJob[];
   simulation_jobs: SimulationJob[];
   analysis_jobs: AnalysisJob[];

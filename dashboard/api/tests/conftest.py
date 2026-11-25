@@ -27,6 +27,7 @@ os.environ["JUPYTERHUB_USER"] = "testuser"
 os.environ.pop("JUPYTERHUB_SERVICE_PREFIX", None)
 os.environ["POD_NAMESPACE"] = "test-namespace"
 os.environ["HUB_NAMESPACE"] = "test-hub-namespace"
+os.environ["API_IMAGE"] = "test-api"
 os.environ["PVC_NAME"] = "test-pvc"
 os.environ["PVC_STORAGE_SIZE"] = "1Gi"
 os.environ["NS_MAX_NOTEBOOKS"] = "2"

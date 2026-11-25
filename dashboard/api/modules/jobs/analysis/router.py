@@ -9,7 +9,7 @@ from core.responses import problems
 from fastapi import APIRouter, Path, Query, Response
 from fastapi.responses import JSONResponse
 
-from modules.experiments.dependencies import ExperimentDep
+from modules.experiments.dependencies import ReadyExperimentDep
 from modules.jobs.analysis.results import read_result, read_variants, result_names
 from modules.jobs.analysis.schemas import AnalysisJob as AnalysisJobOut
 from modules.jobs.analysis.schemas import AnalysisJobRequest, AnalysisResult, AnalysisVariant
@@ -45,10 +45,10 @@ async def list_jobs(
     summary="Submit an analysis job",
     operation_id="submitAnalysisJob",
     response_description="Submitted analysis job",
-    responses=problems(400, 404),
+    responses=problems(400, 404, 409),
 )
 async def submit_job(
-    session: SessionDep, service: AnalysisServiceDep, experiment: ExperimentDep, body: AnalysisJobRequest
+    session: SessionDep, service: AnalysisServiceDep, experiment: ReadyExperimentDep, body: AnalysisJobRequest
 ) -> AnalysisJobOut:
     """Submit an analysis job for a simulation's trajectory."""
     job = await service.submit(experiment, body.simulation_path, body.analysis, body.preprocessing_mode)
@@ -149,7 +149,7 @@ async def get_job(
     summary="Delete an analysis job",
     operation_id="deleteAnalysisJob",
     response_description="Operation completed successfully",
-    responses=problems(404),
+    responses=problems(404, 409),
 )
 async def delete_job(service: AnalysisServiceDep, experiment_id: ExperimentIdPath, job_id: JobId) -> None:
     """Delete an analysis job and its temporary files."""

@@ -9,7 +9,7 @@ from core.enums import AmberBinary, Engine, EwaldPreset, JobStatus
 from core.errors import BadRequest
 from fastapi import Depends
 
-from modules.experiments.dependencies import get_experiment_or_404
+from modules.experiments.dependencies import get_ready_experiment_or_404
 from modules.jobs.amber.models import AmberJob
 from modules.jobs.models import SimulationJob
 from modules.jobs.runs import RunService
@@ -36,7 +36,7 @@ class AmberService(RunService[AmberJob]):
             BadRequest: If the binary or Ewald preset is unknown.
         """
         check_simulation_path(simulation_path)
-        experiment = await get_experiment_or_404(self._session, experiment_id)
+        experiment = await get_ready_experiment_or_404(self._session, experiment_id)
         try:
             amber_binary = AmberBinary.from_string(binary)
             ewald_preset = EwaldPreset.from_string(ewald)

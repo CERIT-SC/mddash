@@ -188,3 +188,88 @@ describe("CreateExperimentDialog", () => {
     expect((uploaded as File).name).toBe("topol.tpr")
   })
 })
+
+const POPULATION_OPERATION_ID = "op0123456789abcdef"
+const POPULATION_EXPERIMENT_ID = "popexp1"
+
+/**
+ * Create answers 202 with the provisional experiment id. The operation status
+ * endpoint is still stubbed so any call to it is countable — the dialog must not
+ * use it at all; progress tracking lives on the experiment page.
+ */
+function stubPopulationApi() {
+  let submitted: [string, FormDataEntryValue][] | null = null
+  let statusCalls = 0
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = requestUrl(input)
+    if (init?.method === "POST" && init.body instanceof FormData) {
+      submitted = Array.from(init.body.entries())
+      return Response.json(
+        { operation_id: POPULATION_OPERATION_ID, experiment_id: POPULATION_EXPERIMENT_ID },
+        { status: 202 }
+      )
+    }
+    if (url.endsWith(`/dash/api/experiment-population-jobs/${POPULATION_OPERATION_ID}`)) {
+      statusCalls += 1
+      return Response.json({}, { status: 200 })
+    }
+    if (url.includes("notebook-modules")) return Response.json(CATALOG_MODULES)
+    return Response.json([])
+  })
+  return { getSubmitted: () => submitted, statusCalls: () => statusCalls }
+}
+
+describe("CreateExperimentDialog — Datahugger-NG population", () => {
+  beforeEach(() => vi.unstubAllGlobals())
+
+  it("opens the provisional experiment immediately when the create call answers 202", { timeout: 15000 }, async () => {
+    const api = stubPopulationApi()
+    const user = userEvent.setup()
+    const { router } = await renderPage()
+
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+    await user.type(screen.getByLabelText("Name"), "Datahugger run")
+    await user.click(dialogTab(/datahugger/i))
+    // surrounding whitespace is trimmed before submission
+    await user.type(screen.getByLabelText("Repository URL"), " https://github.com/owner/dataset ")
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+
+    expect(await waitForSubmit(api.getSubmitted)).toEqual(
+      expect.arrayContaining([
+        ["experiment-name", "Datahugger run"],
+        ["type", "datahugger"],
+        ["repo-url", "https://github.com/owner/dataset"],
+        ["notebooks-repo", NOTEBOOKS_REPO],
+        ["engine", "GMX"],
+      ])
+    )
+
+    // A 202 means the provisional experiment already exists and is being populated:
+    // the dialog closes and opens it, without following the operation itself.
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe(`/experiments/${POPULATION_EXPERIMENT_ID}`), {
+      timeout: 10000,
+    })
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(api.statusCalls()).toBe(0)
+  })
+
+  it("rejects a missing or non-http repository URL for the datahugger source", async () => {
+    const api = stubPopulationApi()
+    const user = userEvent.setup()
+    await renderPage()
+
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
+    await user.type(screen.getByLabelText("Name"), "Bad URL run")
+    await user.click(dialogTab(/datahugger/i))
+
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    expect(await screen.findByText("Enter a valid http(s) repository URL")).toBeVisible()
+
+    // a git URL is valid for the notebooks repo but not for a public dataset
+    await user.type(screen.getByLabelText("Repository URL"), "git@github.com:owner/dataset.git")
+    await user.click(screen.getByRole("button", { name: "Create Experiment" }))
+    expect(await screen.findByText("Enter a valid http(s) repository URL")).toBeVisible()
+
+    expect(api.getSubmitted()).toBeNull()
+  })
+})

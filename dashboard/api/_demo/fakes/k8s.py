@@ -9,6 +9,7 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from shutil import rmtree
 from types import SimpleNamespace
 
@@ -18,6 +19,8 @@ from core.config import DATA_DIR
 from core.enums import JobStatus, NotebookTier, PodStatus
 from modules.archive.status import ArchiveStatus
 from modules.archive.status import write_status as write_archive_status
+from modules.population.downloader import ERROR_VALIDATION
+from modules.population.receipt import write_receipt as write_population_receipt
 from modules.publishing.status import UploadStatus, read_status
 from modules.publishing.status import write_status as write_upload_status
 from modules.publishing.submission import EXPERIMENT_LABEL
@@ -33,14 +36,27 @@ ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 # MDRepo upload job duration in seconds (0.5s in E2E mode)
 UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
+# Datahugger population worker: one staged file + progress receipt per tick.
+# (demo-slow stretches the ticks so an import can be cancelled mid-download.)
+POPULATION_TICK_SEC = 0.25 if E2E else 1.5
+POPULATION_SLOW_TICK_SEC = 1.5 if E2E else 3.0
+
 
 def _create_job_raw(manifest: dict) -> None:
-    """Simulate the MDRepo upload and archive workers: mark done after a short delay."""
+    """Simulate the MDRepo upload, archive, and Datahugger population workers: mark done after a short delay."""
     try:
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
         args = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
     except (KeyError, IndexError, ValueError):
+        return
+
+    # The population worker's args start with --operation-id.
+    if args and args[0] == "--operation-id":
+        operation_id = args[args.index("--operation-id") + 1]
+        repo_url = args[args.index("--repo-url") + 1] if "--repo-url" in args else ""
+        demo_state.population_jobs[job_name] = operation_id
+        threading.Thread(target=_finish_population_job, args=(job_name, operation_id, repo_url), daemon=True).start()
         return
 
     # Archive worker args start with the mode; the upload worker's with --experiment-id.
@@ -117,10 +133,103 @@ def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> Non
     mdrepo_status_cache.clear()
 
 
-def _read_upload_job(name: str) -> SimpleNamespace | None:
-    if name not in demo_state.upload_jobs:
-        return None
-    return SimpleNamespace(status=SimpleNamespace(active=1))
+def _demo_dataset(file_count: int) -> list[tuple[str, bytes]]:
+    """Deterministic staged dataset: one trajectory file per tick plus a manifest."""
+    entries = [
+        (f"files/trajectory-{i:02d}.xtc", b"\x89XTC" + bytes((i * 37 + k) % 256 for k in range(256 * (i + 1))))
+        for i in range(file_count)
+    ]
+    entries.append(("dataset-info.txt", b"Simulated Datahugger-NG dataset for the MDDash demo.\n"))
+    return entries
+
+
+def _staging_counts(staging: Path) -> tuple[int, int]:
+    """Measured staging progress: regular-file count and current byte total (the real sampler's job)."""
+    files = 0
+    size = 0
+    for path in staging.rglob("*"):
+        if path.is_file() and not path.is_symlink():
+            files += 1
+            size += path.stat().st_size
+    return files, size
+
+
+def _finish_population_job(job_name: str, operation_id: str, repo_url: str) -> None:
+    """
+    Stand-in for the Datahugger population worker (no external repository access).
+
+    Stages one deterministic file per tick, publishing a running receipt with
+    measured counters after each write, then a success receipt. It checks for
+    Job deletion (cancellation) before every write and stops without touching
+    the receipt again. A URL containing "demo-fail" deterministically fails
+    after partial staging; "demo-slow" stretches the ticks so the import can
+    be cancelled mid-download.
+    """
+    from modules.population.receipt import staging_dir  # ruff:ignore[import-outside-top-level]
+
+    failed = "demo-fail" in repo_url
+    tick = POPULATION_SLOW_TICK_SEC if "demo-slow" in repo_url else POPULATION_TICK_SEC
+    dataset = _demo_dataset(4)
+    files_total, bytes_total = len(dataset), sum(len(content) for _, content in dataset)
+
+    # Pre-crawl: totals are known before the download starts.
+    write_population_receipt(
+        operation_id, "running", phase="crawling", files_total=files_total, bytes_total=bytes_total
+    )
+
+    staged = dataset[:2] if failed else dataset
+    for relative_path, content in staged:
+        time.sleep(tick)
+        if job_name not in demo_state.population_jobs:
+            return  # the worker Job was deleted (cancellation) mid-flight
+        path = staging_dir(operation_id) / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+        files_present, bytes_present = _staging_counts(staging_dir(operation_id))
+        write_population_receipt(
+            operation_id,
+            "running",
+            phase="downloading",
+            files_present=files_present,
+            files_total=files_total,
+            bytes_present=bytes_present,
+            bytes_total=bytes_total,
+        )
+
+    if failed:
+        # Deterministic validation failure after partial staging (safe error, last counters).
+        files_present, bytes_present = _staging_counts(staging_dir(operation_id))
+        write_population_receipt(
+            operation_id,
+            "failed",
+            ERROR_VALIDATION,
+            phase="downloading",
+            files_present=files_present,
+            files_total=files_total,
+            bytes_present=bytes_present,
+            bytes_total=bytes_total,
+        )
+        demo_state.population_jobs.pop(job_name, None)
+        return
+
+    if job_name not in demo_state.population_jobs:
+        return
+    write_population_receipt(
+        operation_id,
+        "succeeded",
+        phase="finalizing",
+        files_present=files_total,
+        files_total=files_total,
+        bytes_present=bytes_total,
+        bytes_total=bytes_total,
+    )
+    demo_state.population_jobs.pop(job_name, None)
+
+
+def _read_worker_job(name: str) -> SimpleNamespace | None:
+    if name in demo_state.upload_jobs or name in demo_state.population_jobs:
+        return SimpleNamespace(status=SimpleNamespace(active=1))
+    return None
 
 
 def _get_pod_info(name: str) -> tuple[PodStatus, "datetime | None"]:
@@ -205,6 +314,8 @@ def _get_job_status(name: str) -> JobStatus:
     Returns:
         The job status for the given job name.
     """
+    if name in demo_state.population_jobs:
+        return JobStatus.RUNNING
     job_data = demo_state.analysis_jobs.get(name)
     if job_data is None:
         return JobStatus.UNKNOWN
@@ -287,6 +398,10 @@ class DemoK8sClient(K8sClient):
         """Analysis Job status from the demo state."""
         return _get_job_status(name)
 
+    async def read_job_status(self, name: str) -> JobStatus:
+        """Read the population worker status from the demo state."""
+        return _get_job_status(name)
+
     async def delete_job(self, name: str) -> None:
         """Forget an analysis Job."""
         _delete_job(name)
@@ -326,12 +441,13 @@ class DemoK8sClient(K8sClient):
         return True
 
     async def read_job(self, name: str) -> object | None:
-        """Upload/archive worker Job while its thread runs."""
-        return _read_upload_job(name)
+        """Worker Job (upload/archive/population) while its thread runs."""
+        return _read_worker_job(name)
 
     async def delete_job_foreground(self, name: str) -> None:
         """Forget a worker Job."""
         demo_state.upload_jobs.pop(name, None)
+        demo_state.population_jobs.pop(name, None)
 
     async def wait_for_resource_absence(
         self,

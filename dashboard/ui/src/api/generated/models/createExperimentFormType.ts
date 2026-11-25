@@ -13,4 +13,5 @@ export const CreateExperimentFormType = {
   pdb: 'pdb',
   repo: 'repo',
   file: 'file',
+  datahugger: 'datahugger',
 } as const;

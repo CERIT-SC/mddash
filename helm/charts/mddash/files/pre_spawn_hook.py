@@ -482,6 +482,8 @@ _API_PASSTHROUGH_ENV = [
     "METADUMP_API_URL",
     "MDREPO_UPLOADER_IMAGE",
     "ARCHIVE_WORKER_IMAGE",
+    # The API's own image; one-shot Datahugger population worker Jobs reuse it.
+    "API_IMAGE",
 ]
 
 

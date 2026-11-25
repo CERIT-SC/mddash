@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import sqlalchemy as sa
 from core.config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from modules.jobs.models import SimulationJob
     from modules.jobs.tuner.models import TunerJob
     from modules.notebooks.models import Notebook
+    from modules.population.models import PopulationOperation
     from modules.simulations.manifest import Simulation
 
 
@@ -70,6 +71,14 @@ class Experiment(Base):
     # Child rows load with the experiment (async sessions cannot lazy-load on attribute access).
     notebook: Mapped["Notebook"] = relationship(
         "Notebook", back_populates="experiment", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    population: Mapped[Optional["PopulationOperation"]] = relationship(
+        "PopulationOperation",
+        back_populates="experiment",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="selectin",
+        single_parent=True,
     )
     tuner_jobs: Mapped[list["TunerJob"]] = relationship(
         "TunerJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"

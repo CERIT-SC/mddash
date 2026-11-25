@@ -123,6 +123,17 @@ class TestGetJobStatus:
 
         assert await clients.k8s.get_job_status("analysis-x") == JobStatus.RUNNING
 
+    async def test_api_error_raises_on_strict_read(
+        self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients
+    ) -> None:
+        """An unreadable Job is no status for the strict read; get_job_status still reports ERROR."""
+        _, batch = mock_k8s
+        batch.read_namespaced_job.side_effect = ApiException(status=503)
+
+        with pytest.raises(ApiException):
+            await clients.k8s.read_job_status("datahugger-populate-x")
+        assert await clients.k8s.get_job_status("analysis-x") == JobStatus.ERROR
+
 
 async def test_job_logs_decode_raw_bytes(mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
     """Logs are read unpreloaded and decoded with replacement (truncation can split a character)."""
