@@ -46,3 +46,5 @@
 - .archive-status.json.*
 - **/.archive-status.json
 - **/.archive-status.json.*
+- .mddash-setup-run.*
+- **/.mddash-setup-run.*

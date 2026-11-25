@@ -5,12 +5,14 @@ from datetime import datetime, timedelta
 
 from core.config import DATA_DIR
 
+from ..fakes.setup_job import FAIL_MARKER
 from ..files import (
     ensure_amber_demo_files,
     ensure_demo_files,
     ensure_mdposit_demo_files,
     write_amber_simulation,
     write_gmx_simulation,
+    write_setup_notebook,
 )
 from ..state import E2E
 from .experiments import (
@@ -18,6 +20,8 @@ from .experiments import (
     AMBER_FOLDING,
     E2E_AMBER_TETRA,
     E2E_GMX_STUDIES,
+    E2E_SETUP_FAIL,
+    E2E_SETUP_RUN,
     ENZYME,
     MDPOSIT_IMPORT,
     MEMBRANE,
@@ -61,6 +65,10 @@ def seed_files() -> None:
             inpcrd_name="tetrapeptide.inpcrd",
             mdin_names=["production.mdin"],
         )
+        for experiment_id in (E2E_SETUP_RUN, E2E_SETUP_FAIL):
+            ensure_demo_files(experiment_id, ["structure.pdb"])
+        write_setup_notebook(E2E_SETUP_RUN)
+        write_setup_notebook(E2E_SETUP_FAIL, extra_source=f"# {FAIL_MARKER}")
 
 
 def seed_manifests() -> None:

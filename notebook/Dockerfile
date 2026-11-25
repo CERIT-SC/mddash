@@ -92,5 +92,7 @@ RUN python -m pip install --no-cache-dir --no-build-isolation /tmp/jupyterlab-pi
     && jupyter labextension list
 
 COPY --chown=1000:1000 --chmod=755 setup-binder-env     /usr/local/bin/before-notebook.d/setup-binder-env
+COPY --chown=1000:1000 --chmod=644 activate-env.sh      /usr/local/bin/activate-env.sh
 COPY --chown=1000:1000 --chmod=755 start-with-binder.sh /usr/local/bin/start-with-binder.sh
 COPY --chown=1000:1000 --chmod=755 run-notebook.sh      /usr/local/bin/run-notebook.sh
+COPY --chown=1000:1000 --chmod=755 run-setup.sh         /usr/local/bin/run-setup.sh

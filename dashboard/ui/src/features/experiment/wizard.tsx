@@ -73,7 +73,7 @@ const pollWhileExperimentActive = (query: { state: { data: unknown } }): number 
 export type WizardSearch = {
   /** Selected simulation tab. simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Setup source view; only the non-default "manual" is worth a param. */
+  /** Setup source view; the default "run" never needs a param. */
   source?: SetupSource
   /** Picked tuning trial in Configuration (dropped when the job is re-tuned). */
   trial?: string
@@ -211,8 +211,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           experiment={data}
           simulation={selected}
           creating={creating}
-          source={search.source ?? "notebook"}
-          onSourceChange={(source) => updateSearch({ simulation: simTab, source })}
+          hasSimulations={list.length > 0}
+          source={search.source ?? "run"}
+          onSourceChange={(source) =>
+            updateSearch({ simulation: simTab, source: source === "run" ? undefined : source })
+          }
           onOpenSimulation={(simulation) => updateSearch({ simulation })}
         />
       )

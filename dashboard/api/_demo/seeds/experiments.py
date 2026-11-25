@@ -19,6 +19,8 @@ AMBER_DNA = "eeeee"
 MDPOSIT_IMPORT = "fffff"
 ARCHIVED = "ggggg"
 E2E_AMBER_TETRA = "iiiii"
+E2E_SETUP_RUN = "lllll"
+E2E_SETUP_FAIL = "mmmmm"
 
 
 @dataclass(frozen=True)
@@ -225,5 +227,24 @@ def seed_experiments(now: datetime) -> tuple[dict[str, Experiment], list[Noteboo
         )
         experiments.append(amber_tetra)
         notebooks.append(_notebook(amber_tetra, "tetra"))
+        # Uploaded inputs and a setup notebook, no simulation yet: the headless setup journeys own them.
+        for experiment_id, name in (
+            (E2E_SETUP_RUN, "Ubiquitin headless setup"),
+            (E2E_SETUP_FAIL, "Ubiquitin setup with a broken step"),
+        ):
+            experiment = build_model(
+                Experiment,
+                id=experiment_id,
+                name=name,
+                module_name="Protein",
+                module_category="protein",
+                source_type=SourceType.FILE,
+                source_files=["structure.pdb"],
+                notebooks_repo=NOTEBOOKS_REPO,
+                created_at=now - timedelta(hours=2),
+                updated_at=now - timedelta(hours=2),
+            )
+            experiments.append(experiment)
+            notebooks.append(_notebook(experiment, experiment_id))
 
     return {experiment.id: experiment for experiment in experiments}, notebooks

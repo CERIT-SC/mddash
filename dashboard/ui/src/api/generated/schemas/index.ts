@@ -1233,6 +1233,114 @@ export const DeleteSimulationResponse = zod.void()
 
 
 /**
+ * Execute the setup notebook headless in a Kubernetes Job.
+ * @summary Run setup
+ */
+
+
+
+export const StartSetupParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const startSetupBodyNotebookDefault = `setup.ipynb`;
+
+export const startSetupBodyGpuDefault = false;
+
+export const StartSetupBody = zod.object({
+  "notebook": zod.string().min(1).default(startSetupBodyNotebookDefault).describe('Experiment-relative notebook'),
+  "tier": zod.union([zod.enum(['1x', '2x', '4x']),zod.null()]).optional(),
+  "gpu": zod.boolean().default(startSetupBodyGpuDefault)
+}).describe('Setup run options.')
+
+export const startSetupResponseWaitingDefault = false;
+export const startSetupResponseStepDefault = 0;
+export const startSetupResponseManifestsDefault = [];
+
+export const StartSetupResponse = zod.object({
+  "notebook": zod.string(),
+  "state": zod.enum(['starting', 'running', 'done', 'stopped', 'failed']).describe('Lifecycle of a headless setup run.'),
+  "waiting": zod.boolean().default(startSetupResponseWaitingDefault).describe('Starting, but the pod can\'t be scheduled yet'),
+  "step": zod.int().default(startSetupResponseStepDefault).describe('1-based step in progress or reached; 0 before the first'),
+  "total": zod.union([zod.int(),zod.null()]).optional(),
+  "title": zod.union([zod.string(),zod.null()]).optional(),
+  "error": zod.union([zod.object({
+  "step": zod.union([zod.int(),zod.null()]).optional().describe('1-based step the run stopped at'),
+  "title": zod.union([zod.string(),zod.null()]).optional(),
+  "message": zod.string(),
+  "solution": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Why a setup run failed: the notebook\'s own error, or a friendly infrastructure message.'),zod.null()]).optional(),
+  "manifests": zod.array(zod.string()).default(startSetupResponseManifestsDefault).describe('Experiment-relative manifests the run wrote'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).optional(),
+  "finished_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).optional()
+}).describe('A headless setup run, reconciled from its Kubernetes Job and the executor\'s status doc.')
+
+
+/**
+ * Get the notebook's setup run (404 when setup never ran).
+ * @summary Get the setup run
+ */
+
+
+
+export const GetSetupParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const getSetupQueryNotebookDefault = `setup.ipynb`;
+
+
+
+export const GetSetupQueryParams = zod.object({
+  "notebook": zod.string().min(1).default(getSetupQueryNotebookDefault).describe('Experiment-relative notebook')
+})
+
+export const getSetupResponseWaitingDefault = false;
+export const getSetupResponseStepDefault = 0;
+export const getSetupResponseManifestsDefault = [];
+
+export const GetSetupResponse = zod.object({
+  "notebook": zod.string(),
+  "state": zod.enum(['starting', 'running', 'done', 'stopped', 'failed']).describe('Lifecycle of a headless setup run.'),
+  "waiting": zod.boolean().default(getSetupResponseWaitingDefault).describe('Starting, but the pod can\'t be scheduled yet'),
+  "step": zod.int().default(getSetupResponseStepDefault).describe('1-based step in progress or reached; 0 before the first'),
+  "total": zod.union([zod.int(),zod.null()]).optional(),
+  "title": zod.union([zod.string(),zod.null()]).optional(),
+  "error": zod.union([zod.object({
+  "step": zod.union([zod.int(),zod.null()]).optional().describe('1-based step the run stopped at'),
+  "title": zod.union([zod.string(),zod.null()]).optional(),
+  "message": zod.string(),
+  "solution": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Why a setup run failed: the notebook\'s own error, or a friendly infrastructure message.'),zod.null()]).optional(),
+  "manifests": zod.array(zod.string()).default(getSetupResponseManifestsDefault).describe('Experiment-relative manifests the run wrote'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).optional(),
+  "finished_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).optional()
+}).describe('A headless setup run, reconciled from its Kubernetes Job and the executor\'s status doc.')
+
+
+/**
+ * Stop the run in progress.
+ * @summary Stop the setup run
+ */
+
+
+
+export const StopSetupParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const stopSetupQueryNotebookDefault = `setup.ipynb`;
+
+
+
+export const StopSetupQueryParams = zod.object({
+  "notebook": zod.string().min(1).default(stopSetupQueryNotebookDefault).describe('Experiment-relative notebook')
+})
+
+export const StopSetupResponse = zod.void()
+
+
+/**
  * List all GROMACS jobs of an experiment.
  * @summary List GROMACS jobs
  */

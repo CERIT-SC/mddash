@@ -53,6 +53,7 @@ class DemoState:
     mdrepo_counter: int = 1
     upload_jobs: dict[str, str] = field(default_factory=dict)  # job_name -> experiment_id
     population_jobs: dict[str, str] = field(default_factory=dict)  # job_name -> operation_id
+    setup_jobs: dict[str, str] = field(default_factory=dict)  # job_name -> active | complete | failed
     mdposit_projects: dict[str, dict[str, Any]] = field(default_factory=_default_mdposit_projects)
 
     def reset(self) -> None:
@@ -66,6 +67,7 @@ class DemoState:
         self.mdrepo_counter = 1
         self.upload_jobs.clear()
         self.population_jobs.clear()
+        self.setup_jobs.clear()
         self.mdposit_projects = _default_mdposit_projects()
         self.initialized = False
 

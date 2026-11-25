@@ -1,0 +1,118 @@
+{
+  "01-heading-discovery.ipynb": [
+    {
+      "label": "Configuration",
+      "source": "heading",
+      "cells": [
+        2
+      ]
+    },
+    {
+      "label": "Preparation",
+      "source": "heading",
+      "cells": [
+        4
+      ]
+    },
+    {
+      "label": "Analysis",
+      "source": "heading",
+      "cells": [
+        6
+      ]
+    }
+  ],
+  "02-marker-discovery-no-headings.ipynb": [
+    {
+      "label": "Select input molecule",
+      "source": "marker",
+      "cells": [
+        2
+      ]
+    },
+    {
+      "label": "Validate parameters",
+      "source": "marker",
+      "cells": [
+        4
+      ]
+    },
+    {
+      "label": "Produce report",
+      "source": "marker",
+      "cells": [
+        6
+      ]
+    }
+  ],
+  "03-metadata-discovery.ipynb": [
+    {
+      "label": "Simulation settings",
+      "source": "metadata",
+      "cells": [
+        1,
+        2
+      ]
+    },
+    {
+      "label": "Energy check",
+      "source": "metadata",
+      "cells": [
+        3
+      ]
+    },
+    {
+      "label": "Export results",
+      "source": "metadata",
+      "cells": [
+        4
+      ]
+    }
+  ],
+  "04-cell-metadata-and-code-markers.ipynb": [
+    {
+      "label": "Cell metadata step",
+      "source": "cell-metadata",
+      "cells": [
+        1
+      ]
+    },
+    {
+      "label": "Inline code marker",
+      "source": "marker",
+      "cells": [
+        2
+      ]
+    },
+    {
+      "label": "Tracker call marker",
+      "source": "explicit",
+      "cells": [
+        3
+      ]
+    }
+  ],
+  "05-fallback-and-failure.ipynb": [
+    {
+      "label": "Code cell 2: value = 42",
+      "source": "fallback",
+      "cells": [
+        1
+      ]
+    },
+    {
+      "label": "Code cell 3: raise RuntimeError(\"Intentional failure for t...",
+      "source": "fallback",
+      "cells": [
+        2
+      ]
+    },
+    {
+      "label": "Code cell 4: print(\"This cell should not run after the int...",
+      "source": "fallback",
+      "cells": [
+        3
+      ]
+    }
+  ]
+}

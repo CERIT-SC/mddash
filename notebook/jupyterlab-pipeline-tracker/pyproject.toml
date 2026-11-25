@@ -7,10 +7,13 @@ name = "jupyterlab-pipeline-tracker"
 version = "0.1.0"
 description = "JupyterLab 4 extension for notebook pipeline tracking"
 readme = {text = "JupyterLab 4 extension for notebook pipeline tracking.", content-type = "text/markdown"}
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 authors = [{name = "Simon Hudec", email = "524860@mail.muni.cz"}]
 license = {text = "MIT"}
-dependencies = []
+dependencies = ["nbclient>=0.10", "nbformat>=5.10"]
+
+[project.scripts]
+mddash-run-notebook = "jupyterlab_pipeline_tracker.run:main"
 
 [project.urls]
 Homepage = "https://github.com/example/jupyterlab-pipeline-tracker"
@@ -20,7 +23,7 @@ src = "."
 dest = "jupyterlab_pipeline_tracker/labextension"
 
 [tool.setuptools.packages.find]
-exclude = ["node_modules", "node_modules.*", ".venv", ".venv.*"]
+exclude = ["node_modules", "node_modules.*", ".venv", ".venv.*", "tests", "tests.*"]
 
 [tool.setuptools.package-data]
 jupyterlab_pipeline_tracker = ["labextension/**"]

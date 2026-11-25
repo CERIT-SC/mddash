@@ -26,6 +26,7 @@ from modules.notebooks.catalog import load_catalog_or_exit
 from modules.population import router as population
 from modules.population.service import run_population_monitor
 from modules.publishing import router as publishing
+from modules.setup import router as setup
 from modules.simulations import router as simulations
 from modules.system import router as system
 from openapi import install_openapi
@@ -46,6 +47,7 @@ ROUTERS = (
     mdrepo,
     files,
     simulations,
+    setup,
     gmx,
     amber,
     tuner,
