@@ -4,15 +4,12 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router"
 export const Route = createFileRoute("/experiments/$experimentId")({
   validateSearch: (search: Record<string, unknown>): WizardSearch => ({
     simulation: typeof search.simulation === "string" && search.simulation !== "" ? search.simulation : undefined,
-    step:
-      typeof search.step === "number" && Number.isInteger(search.step) && search.step >= 0 && search.step <= 4
-        ? search.step
-        : undefined,
     source: search.source === "manual" ? "manual" : undefined,
     trial: typeof search.trial === "string" && search.trial !== "" ? search.trial : undefined,
     mode: search.mode === "manual" ? "manual" : undefined,
     analysis: typeof search.analysis === "string" && search.analysis !== "" ? search.analysis : undefined,
     tab: search.tab === "analysis" ? "analysis" : undefined,
+    publish: search.publish === true ? true : undefined,
   }),
   component: function WizardRoute() {
     const { experimentId } = Route.useParams()

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 import jsonschema
 from core.config import DATA_DIR
-from core.enums import Engine, JobStatus
+from core.enums import Engine, JobStatus, Step
 from core.errors import ApiError, BadRequest, NotFound
 from core.utils import FileEntry, get_files_with_extensions
 from core.validators import check_path
@@ -214,7 +214,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._resolved: dict[str, str] | None = None
         self._validation: tuple[bool, list[str], list[str]] | None = None
         self._memo_jobs: JobRows | None = None
-        self._memo_step: tuple[int, str] | None = None
+        self._memo_step: tuple[Step, str] | None = None
 
     def _cached_jobs(self) -> JobRows:
         """
@@ -316,8 +316,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return max(events, default=0.0)
 
     @property
-    def step(self) -> int:
-        """Wizard step of this simulation based on its own jobs and manifest validity."""
+    def step(self) -> Step:
+        """Furthest wizard step this simulation can open, from its own jobs and manifest validity."""
         return self.step_status[0]
 
     @property
@@ -326,42 +326,37 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self.step_status[1]
 
     @property
-    def step_status(self) -> tuple[int, str]:
+    def step_status(self) -> tuple[Step, str]:
         """
         (step, status) from jobs referencing this ``simulation_path``.
 
-        Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
-        A running job counts as Run done once nsteps_done parses from its
-        engine log. Before that, the run's files (trajectory included)
-        don't exist. Publish is experiment-level, not part of this ladder.
+        A running job opens Analysis once nsteps_done parses from its engine
+        log; before that, the run's files (trajectory included) don't exist.
+        Tuning stays in Configuration, which starts the run itself. Publish is
+        experiment-level, not part of this ladder.
         """
         if self._memo_step is None:
             self._memo_step = self._compute_step_status()
         return self._memo_step
 
-    def _compute_step_status(self) -> tuple[int, str]:
+    def _compute_step_status(self) -> tuple[Step, str]:
         jobs = self._cached_jobs()
 
         # One run row per simulation: a running run dominates the ladder; a
         # stopped run keeps its data analyzable exactly like a finished one.
         running = [j for j in jobs.simulation if j.status == JobStatus.RUNNING]
         if running:
-            return (3, "simulating") if running[0].nsteps_done is not None else (2, "simulating")
-        if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
-            return 3, "analyzing"
-        if any(j.status == JobStatus.STOPPED for j in jobs.simulation):
-            return 3, "analyzing"
+            return (Step.ANALYSIS if running[0].nsteps_done is not None else Step.SIMULATION), "simulating"
+        if any(j.status in {JobStatus.FINISHED, JobStatus.STOPPED} for j in jobs.simulation):
+            return Step.ANALYSIS, "analyzing"
         if jobs.simulation:
-            return 2, "simulating"
+            return Step.SIMULATION, "simulating"
 
-        if any(any(t.get("performance") is not None for t in j.trials) for j in jobs.tuner):
-            return 2, "tuning"
         if jobs.tuner:
-            return 1, "tuning"
-
+            return Step.CONFIGURATION, "tuning"
         if self.valid:
-            return 1, "setup complete"
-        return 0, "setup"
+            return Step.CONFIGURATION, "setup complete"
+        return Step.SETUP, "setup"
 
     @property
     def live(self) -> bool:

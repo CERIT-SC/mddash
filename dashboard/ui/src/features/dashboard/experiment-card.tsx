@@ -14,7 +14,7 @@ import {
   useStopNotebook,
   useUpdateExperiment,
 } from "@/api/generated/client"
-import type { Experiment, Population } from "@/api/generated/models"
+import { Step, type Experiment, type Population } from "@/api/generated/models"
 import { getAnalysisLabel } from "@/features/analyze"
 import {
   isNotebookQuotaError,
@@ -28,6 +28,7 @@ import { ModuleIconTile } from "@/shared/module-icon"
 import { isNotebookActive } from "@/shared/pod-status"
 import { populationCounters, populationPolling, populationReady } from "@/shared/population-state"
 import { sourceLabel } from "@/shared/source"
+import { STEP_LABELS, STEPS } from "@/shared/step"
 import { InfoBanner } from "@/shared/ui/info-banner"
 import { PopulationProgress } from "@/shared/ui/population-progress"
 import {
@@ -73,13 +74,11 @@ import { toast } from "sonner"
 import { archiveReasonLabel, archiveStateLabel, isArchived, isArchivedFailed, isArchiving } from "./archive"
 import { isAnalysisJobLive } from "./live-work"
 
-const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
-
-// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) and
-// is consumed directly; the shown counter counts from 1.
-function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
-  const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length - 1))
-  return { shownStep: step + 1, stepIndex: step }
+// The API step is consumed directly; its position in STEPS drives the bar, and the counter counts from 1.
+function stepParts(experiment: Experiment): { step: Step; shownStep: number; stepIndex: number } {
+  const step = experiment.step ?? Step.setup
+  const stepIndex = Math.max(0, STEPS.indexOf(step))
+  return { step, shownStep: stepIndex + 1, stepIndex }
 }
 
 function subtitle(experiment: Experiment): string {
@@ -122,7 +121,7 @@ function DetailRow({ label, value }: DetailRowProps) {
 type DetailsProps = { experiment: Experiment }
 
 function SetupDetails({ experiment }: DetailsProps) {
-  // Index 0 is only ever paired with status "setup" (backend tuple invariant),
+  // The setup step is only ever paired with status "setup" (backend tuple invariant),
   // so setup is by definition not ready on this card.
   return (
     <>
@@ -132,7 +131,7 @@ function SetupDetails({ experiment }: DetailsProps) {
   )
 }
 
-function TuneDetails({ experiment }: DetailsProps) {
+function ConfigurationDetails({ experiment }: DetailsProps) {
   const tuner = latest(experiment.tuner_jobs)
   const explored =
     tuner?.trials.filter((trial) => trial.performance !== null && trial.performance !== undefined).length ?? 0
@@ -144,7 +143,7 @@ function TuneDetails({ experiment }: DetailsProps) {
   )
 }
 
-function RunDetails({ experiment }: DetailsProps) {
+function SimulationDetails({ experiment }: DetailsProps) {
   const job = latest(experiment.simulation_jobs)
   const remaining = typeof job?.estimated_time === "number" && job.estimated_time > 0 ? job.estimated_time : null
   return (
@@ -157,7 +156,7 @@ function RunDetails({ experiment }: DetailsProps) {
 
 // The experiment has no global status: it always inherits the latest simulation's
 // step/status, so analysis rows are scoped to that simulation.
-function AnalyzeDetails({ experiment }: DetailsProps) {
+function AnalysisDetails({ experiment }: DetailsProps) {
   const simulationPath = experiment.latest_simulation_path ?? ""
   // Jobs ride the polled experiments list, so no separate query goes stale.
   const jobs = experiment.analysis_jobs.filter((job) => job.simulation_path === simulationPath)
@@ -210,13 +209,20 @@ function PublishDetails({ experiment }: DetailsProps) {
   )
 }
 
-const STEP_DETAILS = [SetupDetails, TuneDetails, RunDetails, AnalyzeDetails, PublishDetails] as const
+const STEP_DETAILS: Record<Step, (props: DetailsProps) => React.ReactNode> = {
+  setup: SetupDetails,
+  configuration: ConfigurationDetails,
+  simulation: SimulationDetails,
+  analysis: AnalysisDetails,
+}
 
-function StepDetails({ experiment, stepIndex }: { experiment: Experiment; stepIndex: number }) {
-  const Details = STEP_DETAILS[stepIndex]
+function StepDetails({ experiment, step }: { experiment: Experiment; step: Step }) {
+  const Details = STEP_DETAILS[step]
   return (
     <dl className="border-border space-y-2 border-t pt-4">
       <Details experiment={experiment} />
+      {/* A draft or a published record (mdrepo_published set) adds to the step's rows, matching its label. */}
+      {typeof experiment.mdrepo_published === "boolean" && <PublishDetails experiment={experiment} />}
     </dl>
   )
 }
@@ -320,7 +326,7 @@ function RegularExperimentCard({ experiment }: ExperimentCardProps) {
 
   const label = liveLabel(experiment)
 
-  const { shownStep, stepIndex } = stepParts(experiment)
+  const { step, shownStep, stepIndex } = stepParts(experiment)
 
   function toggleNotebook() {
     if (active) stop.mutate({ experimentId: experiment.id })
@@ -454,7 +460,7 @@ function RegularExperimentCard({ experiment }: ExperimentCardProps) {
           </Alert>
         )}
         <div className="flex items-baseline justify-between gap-2 text-sm">
-          <span>{`${STEP_LABELS[stepIndex]} · ${shownStep} of ${STEP_LABELS.length}`}</span>
+          <span>{`${STEP_LABELS[step]} · ${shownStep} of ${STEPS.length}`}</span>
           <span className={cn("flex items-center gap-1.5", busyLabel === null ? "text-text-muted" : undefined)}>
             {busyLabel !== null && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
             {label ?? stateLabel ?? `Active ${relativeTime(experiment.updated_at)}`}
@@ -465,12 +471,12 @@ function RegularExperimentCard({ experiment }: ExperimentCardProps) {
           role="progressbar"
           aria-valuenow={shownStep}
           aria-valuemin={0}
-          aria-valuemax={5}
-          aria-label={`Workflow progress: step ${shownStep} of 5`}
+          aria-valuemax={STEPS.length}
+          aria-label={`Workflow progress: step ${shownStep} of ${STEPS.length}`}
         >
-          {STEP_LABELS.map((label, index) => (
+          {STEPS.map((segment, index) => (
             <span
-              key={label}
+              key={segment}
               className={cn(
                 "h-1.5 flex-1 rounded-full",
                 // Completed steps fill solid, the current step stays tinted,
@@ -484,7 +490,7 @@ function RegularExperimentCard({ experiment }: ExperimentCardProps) {
             />
           ))}
         </div>
-        <StepDetails experiment={experiment} stepIndex={stepIndex} />
+        <StepDetails experiment={experiment} step={step} />
       </CardContent>
 
       {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6. The

@@ -5,7 +5,6 @@ import { expect, test } from "@playwright/test"
 // Run submission uses the per-poll E2E schedule. It takes about 3 polls to reach FINISHED.
 test("guided tuning: trials, failed-trial logs, stop, and run submission", async ({ page }) => {
   await page.goto("experiments/aaaaa")
-  await page.getByRole("button", { name: /Go to section 2: Tune/ }).click()
   await expect(page.getByRole("status", { name: "Tuning in progress" })).toBeVisible()
 
   await expect(page.getByRole("radio", { name: "Pick configuration membrane_00000" })).toBeEnabled()

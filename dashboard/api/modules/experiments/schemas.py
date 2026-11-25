@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, Literal, NotRequired, TypedDict
 
-from core.enums import Engine
+from core.enums import Engine, Step
 from core.schemas import ArchiveState, FileInfo, OrmModel
 from pydantic import BaseModel, ConfigDict, Field, with_config
 
@@ -50,7 +50,7 @@ class Experiment(OrmModel):
     tuner_jobs: list[TunerJob]
     simulation_jobs: list[SimulationJob]
     analysis_jobs: list[AnalysisJob]
-    step: int = 0
+    step: Step = Step.SETUP
     status: str = "setup"
     # Archive lifecycle: archived_at null = active experiment. While archived,
     # step/status/size_bytes serve the snapshot taken at archive time.

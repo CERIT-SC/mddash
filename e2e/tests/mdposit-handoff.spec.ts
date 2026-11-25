@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test"
 // Seed: jjjjj KIX study with a FINISHED GMX run and trajectory, nothing live, unpublished.
 test("prepare an MDPosit handoff package", async ({ page }) => {
   await page.goto("experiments/jjjjj")
-  await page.getByRole("button", { name: /Go to section 5: Publish/ }).click()
+  await page.getByRole("button", { name: "Publish", exact: true }).click()
 
   await page.getByRole("combobox", { name: "Publication target" }).click()
   await page.getByRole("option", { name: "MDPosit" }).click()

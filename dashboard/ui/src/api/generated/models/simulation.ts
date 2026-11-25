@@ -6,6 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { SimulationFiles } from './simulationFiles.ts';
+import type { Step } from './step.ts';
 
 /**
  * A simulation manifest with its validation, lock, and wizard state.
@@ -21,11 +22,7 @@ export interface Simulation {
   valid: boolean;
   errors: string[];
   missing_files: string[];
-  /**
-     * @minimum 0
-     * @maximum 3
-     */
-  step: number;
+  step: Step;
   status: string;
   live: boolean;
   last_activity: number;

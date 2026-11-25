@@ -1,4 +1,4 @@
-import type { FileInfo, Notebook, Simulation } from "@/api/generated/models"
+import { Step, type FileInfo, type Notebook, type Simulation } from "@/api/generated/models"
 import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -72,7 +72,6 @@ function renderSetup(props: Partial<React.ComponentProps<typeof SetupStep>> = {}
   const spies = {
     onOpenSimulation: props.onOpenSimulation ?? vi.fn(),
     onSourceChange: props.onSourceChange ?? vi.fn(),
-    onContinue: props.onContinue ?? vi.fn(),
   }
   render(
     <QueryClientProvider client={client}>
@@ -84,7 +83,6 @@ function renderSetup(props: Partial<React.ComponentProps<typeof SetupStep>> = {}
         source="notebook"
         onOpenSimulation={spies.onOpenSimulation}
         onSourceChange={spies.onSourceChange}
-        onContinue={spies.onContinue}
         {...props}
       />
     </QueryClientProvider>
@@ -101,7 +99,7 @@ describe("SetupStep", () => {
     mockSetup()
     renderSetup()
 
-    expect(await screen.findByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+    expect(await screen.findByText(/Run the setup notebook to generate a simulation manifest/)).toBeVisible()
     const guide = screen.getByRole("region", { name: "Setup guide" })
     expect(within(guide).getByText("Start the notebook")).toBeVisible()
     expect(within(guide).getByText("1", { selector: "span" })).toHaveAttribute("aria-current", "step")
@@ -159,14 +157,14 @@ describe("SetupStep", () => {
     expect(open).toHaveAttribute("href", "/dash/notebook/exp1/lab/tree/setup.ipynb?token=tok")
     expect(open).toHaveAttribute("target", "_blank")
     expect(within(guide).getByText("Wait for the run to finish.")).toBeVisible()
-    expect(within(guide).getByText("Go to Tune")).toBeVisible()
+    expect(within(guide).getByText("Continue to Configuration")).toBeVisible()
   })
 
   it("shows the already-set-up manifest with badges next to a fully checked guide", async () => {
     const existing = simulation("protein.simulation.json", {
       name: "protein",
       valid: true,
-      step: 1,
+      step: Step.configuration,
       files: {
         run_input: "production/protein.tpr",
         reference_structure: "analysis/ref.gro",
@@ -179,7 +177,9 @@ describe("SetupStep", () => {
     const guide = screen.getByRole("region", { name: "Setup guide" })
     expect(await within(guide).findByLabelText("Step 1 done")).toBeInTheDocument()
     expect(await within(guide).findByLabelText("Step 2 done")).toBeInTheDocument()
-    expect(within(guide).getByText("Check the validity of data below and move on to tune.")).toBeVisible()
+    expect(
+      within(guide).getByText("Check the validity of data below. Configuration opens once it is valid.")
+    ).toBeVisible()
 
     expect(await screen.findByText("GROMACS")).toBeInTheDocument()
     expect(screen.getByText("Valid")).toBeInTheDocument()
@@ -188,30 +188,17 @@ describe("SetupStep", () => {
   })
 
   it("keeps the guide past step 2 when the notebook stops", async () => {
-    const existing = simulation("protein.simulation.json", { name: "protein", valid: true, step: 1 })
+    const existing = simulation("protein.simulation.json", { name: "protein", valid: true, step: Step.configuration })
     mockSetup({ notebooks: notebook({ status: "DOWN" }), sims: [existing] })
     renderSetup({ simulation: existing, creating: false })
 
     const guide = screen.getByRole("region", { name: "Setup guide" })
     expect(await within(guide).findByLabelText("Step 1 done")).toBeInTheDocument()
     expect(await within(guide).findByLabelText("Step 2 done")).toBeInTheDocument()
-    expect(within(guide).getByText("Check the validity of data below and move on to tune.")).toBeVisible()
+    expect(
+      within(guide).getByText("Check the validity of data below. Configuration opens once it is valid.")
+    ).toBeVisible()
     expect(within(guide).queryByLabelText("Notebook launcher")).not.toBeInTheDocument()
-  })
-
-  it("disables Go to Tune while no simulation exists", async () => {
-    mockSetup()
-    renderSetup()
-    expect(await screen.findByRole("button", { name: "Go to Tune" })).toBeDisabled()
-  })
-
-  it("reports Go to Tune as a step change once a simulation exists", async () => {
-    const existing = simulation("protein.simulation.json", { name: "protein", valid: true, step: 1 })
-    mockSetup({ sims: [existing] })
-    const user = userEvent.setup()
-    const { onContinue } = renderSetup({ simulation: existing, creating: false })
-    await user.click(await screen.findByRole("button", { name: "Go to Tune" }))
-    expect(onContinue).toHaveBeenCalledTimes(1)
   })
 
   it("reports the Manual tab as a source change instead of flipping local state", async () => {
