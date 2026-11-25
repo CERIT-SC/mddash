@@ -349,15 +349,21 @@ class ExperimentService:
         url = validate_http_url(dataset_url)
         repo, access_token, module = self._resolve_notebooks(notebooks_repo, access_token, notebook_module_id, engine)
         experiment_id = await self.prepare_env(repo, access_token, module)
-        return await self.population.submit(
-            experiment_id=experiment_id,
-            name=name,
-            repo_url=url,
-            notebooks_repo=repo,
-            engine=engine,
-            module_name=module.name if module else None,
-            module_category=module.category if module else None,
-        )
+        try:
+            return await self.population.submit(
+                experiment_id=experiment_id,
+                name=name,
+                repo_url=url,
+                notebooks_repo=repo,
+                engine=engine,
+                module_name=module.name if module else None,
+                module_category=module.category if module else None,
+            )
+        except BaseException:
+            # No committed row owns the prepared notebooks; shielded so a cancelled request still removes them.
+            with anyio.CancelScope(shield=True):
+                await anyio.to_thread.run_sync(lambda: rmtree(DATA_DIR / experiment_id, ignore_errors=True))
+            raise
 
     # --- changes --------------------------------------------------------------------
 

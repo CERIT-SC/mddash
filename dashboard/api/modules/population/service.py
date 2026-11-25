@@ -129,27 +129,40 @@ class PopulationService:
             try:
                 await submit_population_job(self._clients.k8s, operation)
             except SubmissionError:
-                await self._session.rollback()
-                _cleanup(operation, remove_experiment_dir=True)
+                await self._abandon(operation, delete_job=False)
                 raise ApiError(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
                     ERROR_SUBMISSION_FAILED,
                     "urn:mddash:upstream-unavailable",
                     "The download worker could not be started; check the service and try again.",
                 )
+            except BaseException:
+                await self._abandon(operation, delete_job=True)
+                raise
             try:
                 await self._session.commit()
             except BaseException:
-                # The admitted Job must not survive a non-durable provisional row.
-                try:
-                    await delete_population_resources(self._clients.k8s, operation)
-                except Exception:
-                    logger.exception("Could not delete population Job %s after a failed commit", operation.job_name)
-                await self._session.rollback()
-                _cleanup(operation, remove_experiment_dir=True)
+                await self._abandon(operation, delete_job=True)
                 raise
         logger.info("Population %s submitted for experiment %s", operation.id, experiment_id)
         return operation
+
+    async def _abandon(self, operation: PopulationOperation, *, delete_job: bool) -> None:
+        """
+        Undo a submission whose row never became durable; the caller removes the experiment dir.
+
+        Shielded: a cancelled request must not leave an admitted Job running without its row.
+        """
+        with anyio.CancelScope(shield=True):
+            if delete_job:
+                try:
+                    await delete_population_resources(self._clients.k8s, operation)
+                except Exception:
+                    logger.exception(
+                        "Could not delete population Job %s of an abandoned submission", operation.job_name
+                    )
+            await self._session.rollback()
+            await anyio.to_thread.run_sync(lambda: _cleanup(operation))
 
     async def cancel(self, experiment: Experiment) -> PopulationOperation:
         """
@@ -219,21 +232,22 @@ async def run_population_monitor(clients: Clients) -> None:
 async def _reconcile_tick(clients: Clients) -> None:
     """Reconcile every active operation with a fresh session (read-only status GETs never do this)."""
     async with _lifecycle_lock(), session_factory()() as session:
-        operations = (
-            (
-                await session.execute(
-                    select(PopulationOperation).where(PopulationOperation.status.in_(list(PopulationStatus.active())))
-                )
-            )
+        active = list(PopulationStatus.active())
+        operation_ids = (
+            (await session.execute(select(PopulationOperation.id).where(PopulationOperation.status.in_(active))))
             .scalars()
             .all()
         )
-        for operation in operations:
+        for operation_id in operation_ids:
+            # Loaded per operation: a rollback expires every instance the session holds.
+            operation = await session.get(PopulationOperation, operation_id)
+            if operation is None or operation.status not in active:
+                continue
             try:
                 await _reconcile(session, clients, operation)
                 await session.commit()
             except Exception:
-                logger.exception("Population %s reconciliation failed", operation.id)
+                logger.exception("Population %s reconciliation failed", operation_id)
                 await session.rollback()
 
 
@@ -292,7 +306,8 @@ def _apply_progress(operation: PopulationOperation, receipt: PopulationReceipt |
     """Copy the latest bounded receipt progress onto the operation (never infer completion from bytes)."""
     if receipt is None:
         return
-    if receipt.phase in PopulationPhase._value2member_map_:
+    # Only the monitor enters finalizing: a resumed finalization is recognized by it.
+    if receipt.phase in PopulationPhase._value2member_map_ and receipt.phase != PopulationPhase.finalizing:
         operation.phase = PopulationPhase(receipt.phase)
     operation.files_present = max(0, int(receipt.files_present or 0))
     operation.files_total = receipt.files_total

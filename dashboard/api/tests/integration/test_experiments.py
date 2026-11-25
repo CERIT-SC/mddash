@@ -4,6 +4,7 @@ Integration tests for experiment API routes.
 Tests the full request/response cycle with mocked external dependencies.
 """
 
+import asyncio
 import json
 from collections.abc import Iterator
 from http import HTTPStatus
@@ -11,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import anyio
 import httpx
 import pytest
 import respx
@@ -883,6 +885,20 @@ class TestCreateDatahugger:
         assert (await db_session.execute(select(PopulationOperation))).scalars().all() == []
         assert (await db_session.execute(select(Experiment))).scalars().all() == []
         assert not (tmp_path / ".cache").exists()
+        population_k8s.batch_v1.delete_namespaced_job.assert_awaited()
+
+    async def test_create_datahugger_cancelled_during_admission_leaves_no_trace(
+        self, client: AsyncClient, db_session: Session, tmp_path: Path, population_k8s: SimpleNamespace
+    ) -> None:
+        """A request cancelled while the pod is admitted deletes the Job, the rows, and the prepared notebooks."""
+        population_k8s.admit.side_effect = asyncio.CancelledError
+
+        with pytest.raises(asyncio.CancelledError):
+            await client.post("/dash/api/experiments", data=_datahugger_form())
+
+        assert (await db_session.execute(select(PopulationOperation))).scalars().all() == []
+        assert (await db_session.execute(select(Experiment))).scalars().all() == []
+        assert [p.name async for p in anyio.Path(tmp_path).iterdir() if await p.is_dir() and p.name[0] != "."] == []
         population_k8s.batch_v1.delete_namespaced_job.assert_awaited()
 
 

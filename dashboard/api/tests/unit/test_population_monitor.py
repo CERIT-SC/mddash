@@ -394,6 +394,48 @@ class TestReconcile:
         assert not (tmp_path / EXPERIMENT_ID).exists()
         assert not staging.exists()
 
+    async def test_unreadable_worker_does_not_block_the_next_operation(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """A rollback after one operation's Kubernetes error leaves the next one reconcilable."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path)
+        await _seed_operation(db_session, tmp_path, operation_id="fedcba9876543210", experiment_id="efghi")
+        (staging_dir("fedcba9876543210") / "data.txt").parent.mkdir(parents=True)
+        (staging_dir("fedcba9876543210") / "data.txt").write_text("B")
+        write_receipt("fedcba9876543210", "succeeded")
+
+        def status(name: str) -> JobStatus:
+            if name == f"datahugger-populate-{OPERATION_ID}":
+                raise ApiException(status=503)
+            return JobStatus.FINISHED
+
+        k8s.read_job_status.side_effect = status
+        k8s.read_job.return_value = None
+
+        await _reconcile_tick(bundle)
+
+        assert (await _operation(db_session)).status is PopulationStatus.queued
+        assert (await _operation(db_session, "fedcba9876543210")).status is PopulationStatus.succeeded
+
+    async def test_empty_download_fails_even_if_the_worker_lingers(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """The receipt's finalizing phase is not a resumed finalization: an empty staging dir still fails."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path)
+        staging_dir(OPERATION_ID).mkdir(parents=True)
+        write_receipt(OPERATION_ID, "succeeded", phase="finalizing")
+        k8s.read_job.return_value = SimpleNamespace(status=SimpleNamespace(active=1))
+
+        await _reconcile_tick(bundle)
+        k8s.read_job.return_value = None
+        await _reconcile_tick(bundle)
+
+        operation = await _operation(db_session)
+        assert operation.status is PopulationStatus.failed
+        assert operation.error == ERROR_MERGE_FAILED
+
     async def test_multiple_operations_reconciled_independently(
         self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
     ) -> None:
