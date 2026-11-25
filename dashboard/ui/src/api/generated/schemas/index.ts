@@ -128,7 +128,8 @@ export const ListExperimentsResponseItem = zod.object({
   "bytes_present": zod.int(),
   "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
   "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
-  "error": zod.union([zod.string(),zod.null()]).optional()
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "renamed_paths": zod.union([zod.array(zod.string()),zod.null()]).optional()
 }).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -271,7 +272,8 @@ export const CreateExperimentResponse = zod.object({
   "bytes_present": zod.int(),
   "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
   "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
-  "error": zod.union([zod.string(),zod.null()]).optional()
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "renamed_paths": zod.union([zod.array(zod.string()),zod.null()]).optional()
 }).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -401,7 +403,8 @@ export const GetExperimentResponse = zod.object({
   "bytes_present": zod.int(),
   "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
   "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
-  "error": zod.union([zod.string(),zod.null()]).optional()
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "renamed_paths": zod.union([zod.array(zod.string()),zod.null()]).optional()
 }).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -535,7 +538,8 @@ export const UpdateExperimentResponse = zod.object({
   "bytes_present": zod.int(),
   "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
   "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
-  "error": zod.union([zod.string(),zod.null()]).optional()
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "renamed_paths": zod.union([zod.array(zod.string()),zod.null()]).optional()
 }).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -679,7 +683,8 @@ export const CancelExperimentPopulationResponse = zod.object({
   "bytes_present": zod.int(),
   "bytes_total": zod.union([zod.int(),zod.null()]).optional(),
   "byte_percentage": zod.union([zod.number(),zod.null()]).optional(),
-  "error": zod.union([zod.string(),zod.null()]).optional()
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "renamed_paths": zod.union([zod.array(zod.string()),zod.null()]).optional()
 }).describe('Population lifecycle embedded in an ordinary Experiment response.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),

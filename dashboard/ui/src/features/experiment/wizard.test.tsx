@@ -89,6 +89,26 @@ describe("ExperimentWizard population gate", () => {
     expect(screen.queryByText(/section 1 of 5/i)).not.toBeInTheDocument()
   })
 
+  it("lists dataset files renamed by the import above the wizard", async () => {
+    mockApiBySuffix({
+      "/experiments/exp1/simulations": Response.json([simulation(SIM, { valid: true })]),
+      "/experiments/exp1": Response.json(
+        experiment("exp1", {
+          latest_simulation_path: SIM,
+          population: withPopulation("exp1", {
+            status: "succeeded",
+            renamed_paths: ["README.dataset.md", "LICENSE.dataset"],
+          }),
+        })
+      ),
+    })
+    await renderWithProviders(<ExperimentWizard experimentId="exp1" search={{}} onSearchChange={vi.fn()} />)
+
+    expect(await screen.findByText("2 dataset files were renamed")).toBeInTheDocument()
+    expect(screen.getByText("README.dataset.md")).toBeInTheDocument()
+    expect(screen.getByText("Section 1 of 5: Setup")).toBeInTheDocument()
+  })
+
   it("shows a cancelled import as a durable terminal state", async () => {
     await renderPopulationWizard({ status: "cancelled" })
 

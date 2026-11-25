@@ -13,6 +13,7 @@ import secrets
 import weakref
 from datetime import UTC, datetime
 from http import HTTPStatus
+from pathlib import Path
 from shutil import rmtree
 
 import anyio
@@ -237,22 +238,28 @@ async def _reconcile_tick(clients: Clients) -> None:
 
 
 async def _reconcile(session: AsyncSession, clients: Clients, operation: PopulationOperation) -> None:
-    """Drive one active operation to a terminal state from worker state and its receipt."""
+    """
+    Drive one active operation to a terminal state from worker state and its receipt.
+
+    A Kubernetes read error raises, so the tick skips the operation instead of failing it.
+    """
+    # Job before receipt: a worker that writes its receipt and exits between the reads is a success, not an exit.
+    state = await clients.k8s.read_job_status(operation.job_name)
     receipt = await anyio.to_thread.run_sync(read_receipt, operation.id)
     if receipt is not None and receipt.state == PopulationStatus.succeeded.value:
+        resumed = operation.phase is PopulationPhase.finalizing
         _apply_progress(operation, receipt)
         # Finalize only after the worker completed (or TTL-expired), never while it still runs.
         if not await _worker_active(clients, operation.job_name):
             operation.phase = PopulationPhase.finalizing
             await session.commit()
-            await _finalize(session, operation)
+            await _finalize(session, operation, resumed=resumed)
         return
     if receipt is not None and receipt.state == PopulationStatus.failed.value:
         _apply_progress(operation, receipt)
         await _fail(session, operation, receipt.error or ERROR_WORKER_FAILED)
         return
 
-    state = await clients.k8s.get_job_status(operation.job_name)
     if state in {JobStatus.ERROR, JobStatus.FINISHED}:
         # No usable receipt: preserve raw pod evidence only in server logs before the finite job TTL.
         logs = await clients.k8s.get_job_logs(operation.job_name)
@@ -293,11 +300,15 @@ def _apply_progress(operation: PopulationOperation, receipt: PopulationReceipt |
     operation.bytes_total = receipt.bytes_total
 
 
-async def _finalize(session: AsyncSession, operation: PopulationOperation) -> None:
+async def _finalize(session: AsyncSession, operation: PopulationOperation, *, resumed: bool) -> None:
     """Merge the staged dataset into the existing provisional Experiment and mark it succeeded."""
     experiment_dir = DATA_DIR / operation.experiment_id
+    staged = staging_dir(operation.id)
     try:
-        await anyio.to_thread.run_sync(merge_staged, staging_dir(operation.id), experiment_dir)
+        # An interrupted finalization may have moved everything already; an empty staging dir is then done.
+        if not (resumed and _is_empty(staged)):
+            renamed = await anyio.to_thread.run_sync(merge_staged, staged, experiment_dir)
+            operation.renamed_paths = renamed or None
     except (PopulationMergeError, OSError) as e:
         logger.error("Population %s merge failed: %s", operation.id, e)
         await _fail(session, operation, ERROR_MERGE_FAILED, remove_experiment_dir=True)
@@ -321,6 +332,10 @@ async def _fail(
     operation.finished_at = datetime.now(UTC)
     await session.commit()
     logger.warning("Population %s failed: %s", operation.id, error)
+
+
+def _is_empty(path: Path) -> bool:
+    return not path.is_dir() or not any(path.iterdir())
 
 
 def _cleanup(operation: PopulationOperation, *, remove_experiment_dir: bool = False) -> None:

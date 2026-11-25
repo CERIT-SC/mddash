@@ -398,6 +398,10 @@ class DemoK8sClient(K8sClient):
         """Analysis Job status from the demo state."""
         return _get_job_status(name)
 
+    async def read_job_status(self, name: str) -> JobStatus:
+        """Read the population worker status from the demo state."""
+        return _get_job_status(name)
+
     async def delete_job(self, name: str) -> None:
         """Forget an analysis Job."""
         _delete_job(name)

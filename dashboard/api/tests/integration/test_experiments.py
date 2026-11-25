@@ -697,6 +697,12 @@ def population_k8s(clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock]) -> I
         patch.object(clients.k8s, "wait_for_pod_admission", AsyncMock(return_value=True)) as admit,
         patch.object(clients.k8s, "wait_for_resource_absence", AsyncMock(return_value=True)),
     ):
+        # A completed worker Job unless a test scripts another state.
+        mock_k8s[1].read_namespaced_job.return_value = SimpleNamespace(
+            status=SimpleNamespace(
+                conditions=[SimpleNamespace(type="Complete", status="True")], active=0, succeeded=1, failed=0
+            )
+        )
         yield SimpleNamespace(admit=admit, batch_v1=mock_k8s[1])
 
 
@@ -1069,7 +1075,6 @@ class TestPopulationLifecycle:
         (staging / "files").mkdir(parents=True)
         (staging / "files" / "data.pdb").write_text("A")
         write_receipt(operation.id, "succeeded")
-        population_k8s.batch_v1.read_namespaced_job.return_value = None  # completed (or TTL-expired) worker
         await _reconcile(db_session, clients, operation)
 
         detail = (await client.get(f"/dash/api/experiments/{exp_id}")).json()

@@ -32,6 +32,7 @@ class Population(OrmModel):
     bytes_total: int | None = None
     byte_percentage: float | None = None
     error: str | None = None
+    renamed_paths: list[str] | None = None
 
 
 class PopulationOperationStatus(BaseModel):

@@ -554,9 +554,23 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
     async def get_job_status(self, name: str) -> JobStatus:
         """Read the status of a Job (RUNNING, PENDING, FINISHED, ERROR, or UNKNOWN when absent)."""
         try:
+            return await self.read_job_status(name)
+        except ApiException:
+            return JobStatus.ERROR
+
+    async def read_job_status(self, name: str) -> JobStatus:
+        """
+        Like `get_job_status`, but a failed read raises instead of reporting ERROR.
+
+        Raises:
+            ApiException: Any API error except 404. It says nothing about the Job, so it is never a status.
+        """
+        try:
             job = await self.batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
         except ApiException as e:
-            return JobStatus.UNKNOWN if e.status == HTTPStatus.NOT_FOUND else JobStatus.ERROR
+            if e.status == HTTPStatus.NOT_FOUND:
+                return JobStatus.UNKNOWN
+            raise
 
         if not job.status:
             return JobStatus.UNKNOWN

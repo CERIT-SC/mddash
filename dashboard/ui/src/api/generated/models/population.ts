@@ -22,4 +22,5 @@ export interface Population {
   bytes_total?: number | null;
   byte_percentage?: number | null;
   error?: string | null;
+  renamed_paths?: string[] | null;
 }

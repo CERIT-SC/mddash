@@ -3514,6 +3514,12 @@ components:
           anyOf:
           - type: string
           - type: 'null'
+        renamed_paths:
+          anyOf:
+          - items:
+              type: string
+            type: array
+          - type: 'null'
       additionalProperties: false
       type: object
       required:

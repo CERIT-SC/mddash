@@ -49,6 +49,8 @@ class PopulationOperation(Base):
     bytes_present: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
     # Summed only when every selected downloadable entry has a known size.
     bytes_total: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    # Dataset entries renamed at merge because the notebooks already used the name
+    renamed_paths: Mapped[list[str] | None] = mapped_column(sa.JSON, nullable=True)
     # Stable, user-safe failure text; raw native details stay in server logs
     error: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))

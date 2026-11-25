@@ -94,26 +94,40 @@ class TestMergeStaged:
             merge_staged(fs.staging, fs.experiment)
         assert list(fs.experiment.iterdir()) == []
 
-    def test_rejects_file_file_collision(self, fs: SimpleNamespace) -> None:
-        _write(fs.staging / "top.txt", "S")
-        _write(fs.experiment / "top.txt", "E")
-
-        with pytest.raises(PopulationMergeError, match="collides"):
-            merge_staged(fs.staging, fs.experiment)
-        assert (fs.experiment / "top.txt").read_text() == "E"
-        assert (fs.staging / "top.txt").is_file()
-
-    def test_rejects_staged_file_against_experiment_dir(self, fs: SimpleNamespace) -> None:
-        _write(fs.staging / "sub", "S")
-        _write(fs.experiment / "sub" / "a.txt", "A")
-
-        with pytest.raises(PopulationMergeError, match="collides"):
-            merge_staged(fs.staging, fs.experiment)
-
-    def test_rejects_staged_dir_against_experiment_file(self, fs: SimpleNamespace) -> None:
+    def test_file_collision_keeps_both(self, fs: SimpleNamespace) -> None:
+        _write(fs.staging / "README.md", "S")
+        _write(fs.staging / ".gitignore", "S")
+        _write(fs.staging / "LICENSE", "S")
         _write(fs.staging / "sub" / "a.txt", "S")
-        _write(fs.experiment / "sub", "E")
+        for name in ("README.md", ".gitignore", "LICENSE", "sub/a.txt"):
+            _write(fs.experiment / name, "E")
 
-        with pytest.raises(PopulationMergeError, match="collides"):
-            merge_staged(fs.staging, fs.experiment)
-        assert (fs.experiment / "sub").read_text() == "E"
+        renamed = merge_staged(fs.staging, fs.experiment)
+
+        assert sorted(renamed) == [".gitignore.dataset", "LICENSE.dataset", "README.dataset.md", "sub/a.dataset.txt"]
+        for name in renamed:
+            assert (fs.experiment / name).read_text() == "S"
+        for name in ("README.md", ".gitignore", "LICENSE", "sub/a.txt"):
+            assert (fs.experiment / name).read_text() == "E"
+
+    def test_renamed_name_skips_taken_names(self, fs: SimpleNamespace) -> None:
+        _write(fs.staging / "README.md", "S")
+        _write(fs.experiment / "README.md", "E")
+        _write(fs.experiment / "README.dataset.md", "E2")
+
+        assert merge_staged(fs.staging, fs.experiment) == ["README.dataset-2.md"]
+        assert (fs.experiment / "README.dataset-2.md").read_text() == "S"
+        assert (fs.experiment / "README.dataset.md").read_text() == "E2"
+
+    @pytest.mark.parametrize(
+        ("staged", "existing"),
+        [("sub", "sub/a.txt"), ("sub/a.txt", "sub")],
+        ids=["staged-file-vs-dir", "staged-dir-vs-file"],
+    )
+    def test_file_dir_collision_keeps_both(self, fs: SimpleNamespace, staged: str, existing: str) -> None:
+        _write(fs.staging / staged, "S")
+        _write(fs.experiment / existing, "E")
+
+        assert merge_staged(fs.staging, fs.experiment) == ["sub.dataset"]
+        assert (fs.experiment / existing).read_text() == "E"
+        assert (fs.experiment / "sub.dataset" / Path(staged).relative_to("sub")).read_text() == "S"

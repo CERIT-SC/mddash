@@ -16,6 +16,7 @@ import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react
 
 import { ArchivedNotice } from "./archived-notice"
 import { PopulationPage } from "./population-page"
+import { RenamedFilesNotice } from "./renamed-files-notice"
 import { WizardStepperHeader } from "./stepper-header"
 import { TitleRow } from "./title-row"
 
@@ -249,9 +250,12 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ]),
   ]
 
+  const renamedPaths = data.population?.renamed_paths ?? []
+
   return (
     <section className="space-y-6 md:space-y-8">
       <TitleRow experiment={data} />
+      {renamedPaths.length > 0 && <RenamedFilesNotice paths={renamedPaths} />}
 
       <div>
         <SimulationTabs

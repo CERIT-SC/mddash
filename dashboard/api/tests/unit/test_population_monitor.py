@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from clients import Clients
 from core.enums import Engine, JobStatus, PopulationPhase, PopulationStatus, SourceType
+from kubernetes_asyncio.client.exceptions import ApiException
 from modules.models import Experiment, Notebook
 from modules.population.models import PopulationOperation
 from modules.population.receipt import staging_dir, write_receipt
@@ -40,6 +41,7 @@ async def _seed_operation(
     tmp_path: Path,
     *,
     status: PopulationStatus = PopulationStatus.queued,
+    phase: PopulationPhase = PopulationPhase.starting,
     operation_id: str = OPERATION_ID,
     experiment_id: str = EXPERIMENT_ID,
     name: str = "Datahugger Experiment",
@@ -53,6 +55,7 @@ async def _seed_operation(
         engine=Engine.GMX,
         job_name=f"datahugger-populate-{operation_id}",
         status=status,
+        phase=phase,
     )
     experiment = Experiment(
         id=experiment_id,
@@ -135,6 +138,86 @@ class TestReconcile:
         # Successful temporary artifacts are removed after atomic completion.
         assert not staging.exists()
 
+    async def test_collision_keeps_both_and_records_renames(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """A dataset file named like a notebook file is merged under a new name, never failing the import."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path)
+        staging = staging_dir(OPERATION_ID)
+        staging.mkdir(parents=True)
+        (staging / "notebooks.ipynb").write_text("dataset")
+        write_receipt(OPERATION_ID, "succeeded")
+        k8s.read_job.return_value = None
+
+        await _reconcile_tick(bundle)
+
+        operation = await _operation(db_session)
+        assert operation.status is PopulationStatus.succeeded
+        assert operation.renamed_paths == ["notebooks.dataset.ipynb"]
+        assert (tmp_path / EXPERIMENT_ID / "notebooks.ipynb").read_text() == "nb"
+        assert (tmp_path / EXPERIMENT_ID / "notebooks.dataset.ipynb").read_text() == "dataset"
+
+    async def test_interrupted_finalization_resumes_as_success(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """A restart after the merge moved everything finds an empty staging dir and completes."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path, status=PopulationStatus.running, phase=PopulationPhase.finalizing)
+        staging_dir(OPERATION_ID).mkdir(parents=True)
+        (tmp_path / EXPERIMENT_ID / "data.pdb").write_text("A")  # merged before the restart
+        write_receipt(OPERATION_ID, "succeeded")
+        k8s.read_job.return_value = None
+
+        await _reconcile_tick(bundle)
+
+        operation = await _operation(db_session)
+        assert operation.status is PopulationStatus.succeeded
+        assert (tmp_path / EXPERIMENT_ID / "data.pdb").read_text() == "A"
+
+    async def test_receipt_written_as_worker_exits_finalizes(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """A worker that writes its success receipt and exits between the monitor's reads is a success."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path)
+        staging = staging_dir(OPERATION_ID)
+        staging.mkdir(parents=True)
+        (staging / "data.pdb").write_text("A")
+        write_receipt(OPERATION_ID, "running")
+
+        def finish(_: str) -> JobStatus:
+            write_receipt(OPERATION_ID, "succeeded")
+            return JobStatus.FINISHED
+
+        k8s.read_job_status.side_effect = finish
+        k8s.read_job.return_value = None
+
+        await _reconcile_tick(bundle)
+
+        operation = await _operation(db_session)
+        assert operation.status is PopulationStatus.succeeded
+        assert (tmp_path / EXPERIMENT_ID / "data.pdb").read_text() == "A"
+
+    async def test_kubernetes_read_error_leaves_operation_running(
+        self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
+    ) -> None:
+        """An unreadable worker Job says nothing about the worker: the tick skips the operation."""
+        bundle, k8s = population_clients
+        await _seed_operation(db_session, tmp_path, status=PopulationStatus.running)
+        staging = staging_dir(OPERATION_ID)
+        staging.mkdir(parents=True)
+        (staging / "data.pdb").write_text("A")
+        k8s.read_job_status.side_effect = ApiException(status=503)
+
+        await _reconcile_tick(bundle)
+
+        operation = await _operation(db_session)
+        assert operation.status is PopulationStatus.running
+        assert operation.error is None
+        assert (tmp_path / EXPERIMENT_ID / "notebooks.ipynb").is_file()
+        assert (staging / "data.pdb").is_file()
+
     async def test_success_receipt_held_while_worker_active(
         self, db_session: Session, tmp_path, population_clients: tuple[Clients, AsyncMock]
     ) -> None:
@@ -172,7 +255,7 @@ class TestReconcile:
             bytes_present=30,
             bytes_total=100,
         )
-        k8s.get_job_status.return_value = JobStatus.RUNNING
+        k8s.read_job_status.return_value = JobStatus.RUNNING
 
         await _reconcile_tick(bundle)
 
@@ -202,7 +285,7 @@ class TestReconcile:
         operation = await _operation(db_session)
         assert operation.status is PopulationStatus.cancelling
         k8s.read_job.assert_not_awaited()
-        k8s.get_job_status.assert_not_awaited()
+        k8s.read_job_status.assert_not_awaited()
         cancelling = (await _experiments(db_session))[0].population
         assert cancelling is not None
         assert cancelling.status is PopulationStatus.cancelling
@@ -253,7 +336,7 @@ class TestReconcile:
         """A finished, errored, or vanished worker without a success receipt explains its distinct state."""
         bundle, k8s = population_clients
         await _seed_operation(db_session, tmp_path)
-        k8s.get_job_status.return_value = job_status
+        k8s.read_job_status.return_value = job_status
         k8s.get_job_logs.return_value = "Traceback: native secret details"
 
         await _reconcile_tick(bundle)
@@ -277,7 +360,7 @@ class TestReconcile:
         """A still-running worker with no receipt advances the operation to running."""
         bundle, k8s = population_clients
         await _seed_operation(db_session, tmp_path)
-        k8s.get_job_status.return_value = JobStatus.RUNNING
+        k8s.read_job_status.return_value = JobStatus.RUNNING
 
         await _reconcile_tick(bundle)
 
@@ -328,7 +411,7 @@ class TestReconcile:
         (staging_dir("fedcba9876543210") / "data.txt").write_text("B")
         write_receipt("fedcba9876543210", "succeeded")
 
-        k8s.get_job_status.return_value = JobStatus.ERROR  # the first operation's worker died
+        k8s.read_job_status.return_value = JobStatus.ERROR  # the first operation's worker died
         k8s.read_job.return_value = None
 
         await _reconcile_tick(bundle)
