@@ -1010,6 +1010,10 @@ export const ListSimulationsParams = zod.object({
 
 
 
+
+
+
+
 export const ListSimulationsResponseItem = zod.object({
   "simulation_path": zod.string(),
   "name": zod.string(),
@@ -1017,6 +1021,17 @@ export const ListSimulationsResponseItem = zod.object({
   "files": zod.record(zod.string(), zod.string().min(1)),
   "resolved_files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string(),
+  "default_resources": zod.union([zod.object({
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}).describe('Compute settings for a GROMACS run.'),zod.object({
+  "binary": zod.string(),
+  "ewald": zod.string(),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1)
+}).describe('Compute settings for an AMBER run.'),zod.null()]),
   "locked": zod.boolean(),
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
@@ -1056,6 +1071,10 @@ export const CreateSimulationBody = zod.object({
 
 
 
+
+
+
+
 export const CreateSimulationResponse = zod.object({
   "simulation_path": zod.string(),
   "name": zod.string(),
@@ -1063,6 +1082,17 @@ export const CreateSimulationResponse = zod.object({
   "files": zod.record(zod.string(), zod.string().min(1)),
   "resolved_files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string(),
+  "default_resources": zod.union([zod.object({
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}).describe('Compute settings for a GROMACS run.'),zod.object({
+  "binary": zod.string(),
+  "ewald": zod.string(),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1)
+}).describe('Compute settings for an AMBER run.'),zod.null()]),
   "locked": zod.boolean(),
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
@@ -1091,6 +1121,10 @@ export const GetSimulationParams = zod.object({
 
 
 
+
+
+
+
 export const GetSimulationResponse = zod.object({
   "simulation_path": zod.string(),
   "name": zod.string(),
@@ -1098,6 +1132,17 @@ export const GetSimulationResponse = zod.object({
   "files": zod.record(zod.string(), zod.string().min(1)),
   "resolved_files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string(),
+  "default_resources": zod.union([zod.object({
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}).describe('Compute settings for a GROMACS run.'),zod.object({
+  "binary": zod.string(),
+  "ewald": zod.string(),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1)
+}).describe('Compute settings for an AMBER run.'),zod.null()]),
   "locked": zod.boolean(),
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),
@@ -1138,6 +1183,10 @@ export const UpdateSimulationBody = zod.object({
 
 
 
+
+
+
+
 export const UpdateSimulationResponse = zod.object({
   "simulation_path": zod.string(),
   "name": zod.string(),
@@ -1145,6 +1194,17 @@ export const UpdateSimulationResponse = zod.object({
   "files": zod.record(zod.string(), zod.string().min(1)),
   "resolved_files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string(),
+  "default_resources": zod.union([zod.object({
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}).describe('Compute settings for a GROMACS run.'),zod.object({
+  "binary": zod.string(),
+  "ewald": zod.string(),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1)
+}).describe('Compute settings for an AMBER run.'),zod.null()]),
   "locked": zod.boolean(),
   "valid": zod.boolean(),
   "errors": zod.array(zod.string()),

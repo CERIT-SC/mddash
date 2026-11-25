@@ -41,6 +41,7 @@ def write_gmx_simulation(
     structure: str | None = None,
     trajectory: str | None = None,
     extra_args: str = "",
+    resources: dict | None = None,
 ) -> str:
     experiment_dir = DATA_DIR / experiment_id
     sim_path = simulation_path or f"{name}.simulation.json"
@@ -57,6 +58,8 @@ def write_gmx_simulation(
         },
         "extra_args": extra_args,
     }
+    if resources is not None:
+        content["resources"] = resources
     _write_manifest(sim_file, content)
     # Materialize viewer files so the Trajectory Viewer works for seeded simulations.
     _copy_if_missing(experiment_dir / content["files"]["reference_structure"], DEFAULT_GRO_FILE)
@@ -73,6 +76,7 @@ def write_amber_simulation(
     control: str | None = None,
     trajectory: str | None = None,
     extra_args: str = "",
+    resources: dict | None = None,
 ) -> str:
     experiment_dir = DATA_DIR / experiment_id
     sim_path = simulation_path or f"{name}.simulation.json"
@@ -91,6 +95,8 @@ def write_amber_simulation(
         },
         "extra_args": extra_args,
     }
+    if resources is not None:
+        content["resources"] = resources
     _write_manifest(sim_file, content)
     # Materialize viewer files so the Trajectory Viewer works for seeded simulations.
     _copy_if_missing(experiment_dir / content["files"]["reference_structure"], DEFAULT_AMBER_PDB_FILE)

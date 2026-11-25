@@ -5,6 +5,8 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
+import type { AmberJobRequest } from './amberJobRequest.ts';
+import type { GromacsJobRequest } from './gromacsJobRequest.ts';
 import type { SimulationFiles } from './simulationFiles.ts';
 import type { Step } from './step.ts';
 
@@ -18,6 +20,7 @@ export interface Simulation {
   files: SimulationFiles;
   resolved_files: SimulationFiles;
   extra_args: string;
+  default_resources: GromacsJobRequest | AmberJobRequest | null;
   locked: boolean;
   valid: boolean;
   errors: string[];

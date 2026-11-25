@@ -41,22 +41,24 @@ import {
   AlertTitle,
   Button,
   buttonVariants,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Label,
   Separator,
   Skeleton,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { Clock, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
+import { Clock, Gauge, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { CustomizeConfigSection } from "./customize-config"
 import { HardwareConfigForm, type HardwareConfigValues } from "./hardware-config-form"
 import { DEFAULT_NSTEPS, NstepsSelect } from "./nsteps-select"
-import { toJobRequest } from "./run-request"
+import { configSummary, toHardwareValues, toJobRequest } from "./run-request"
 import { TrialLogDialog } from "./trial-log-dialog"
 import { TrialsTable } from "./trials-table"
 import { parseTrials, type TrialRow } from "./tuned-trials"
@@ -76,9 +78,32 @@ const TUNE_REQUIRED_ROLES: Record<Engine, FileRoleKey[]> = {
   [Engine.GMX]: ["run_input"],
   [Engine.AMBER]: ["topology", "coordinates", "control"],
 }
-// The footer submits whichever hardware form is active by native form id.
+// Run buttons submit their hardware form by native form id.
 const MANUAL_FORM_ID = "tune-manual-config"
 const CUSTOMIZE_FORM_ID = "tune-customize-config"
+
+/** Why the simulation can't be tuned or run yet; empty when it can. */
+function setupBlockers(simulation: Simulation, engine: Engine): string[] {
+  const blockers: string[] = []
+  if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
+  const missingRequired = missingRequiredRoles(simulation, TUNE_REQUIRED_ROLES[engine])
+  if (missingRequired.length > 0) {
+    const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
+    blockers.push(`Missing files: ${labels.join(", ")}.`)
+  }
+  return blockers
+}
+
+function SetupBlockersAlert({ blockers }: { blockers: string[] }) {
+  return (
+    <Alert variant="warning">
+      <AlertTitle>Finish setup first</AlertTitle>
+      <AlertDescription>
+        {blockers.join(" ")} Go back to the Setup step to fix this before tuning or running.
+      </AlertDescription>
+    </Alert>
+  )
+}
 
 /** error_message is NullableString. Treat both null and undefined as absent. */
 const hasErrorMessage = (job: TunerJob) => job.error_message !== null && job.error_message !== undefined
@@ -89,7 +114,7 @@ type TuneStepProps = {
   simulation: Simulation
   /** URL-owned picked trial. */
   trialId: string | undefined
-  /** URL-owned tab view. */
+  /** URL-owned; "manual" means the Expert dialog is open. */
   mode: TuneMode
   onTrialIdChange: (trial: string | undefined) => void
   onModeChange: (mode: TuneMode) => void
@@ -99,7 +124,7 @@ type TuneStepProps = {
   pollMs?: number
 }
 
-/** Configuration step: tune hardware configs (or enter one manually) and pick what the run uses. */
+/** Configuration step: start with the setup's default resources, tune first, or enter a config in Expert. */
 export function TuneStep({
   experimentId,
   engine,
@@ -117,8 +142,11 @@ export function TuneStep({
   const [confirmRetune, setConfirmRetune] = useState(false)
   const [confirmStartNsteps, setConfirmStartNsteps] = useState<number | null>(null)
   const [confirmNewRun, setConfirmNewRun] = useState<HardwareConfigValues | null>(null)
-  // The manual and customize forms never co-mount (separate tabs), so one flag suffices.
-  const [formValid, setFormValid] = useState(false)
+  const [manualValid, setManualValid] = useState(false)
+  const [customizeValid, setCustomizeValid] = useState(false)
+  const [tuneRequested, setTuneRequested] = useState(false)
+  const [submitError, setSubmitError] = useState<unknown>()
+  const defaults = simulation.default_resources ?? null
 
   const jobQuery = useGetTunerJob(experimentId, simulation.simulation_path, {
     query: {
@@ -201,24 +229,30 @@ export function TuneStep({
 
   // Run Simulation submits the production job and reports the start on success;
   // a failure stays in Configuration with the actionable error.
-  const submitRunNow = (values: HardwareConfigValues) =>
+  // The Expert dialog stays open until the run starts, so a failure keeps the user's values.
+  const submitRunNow = (values: HardwareConfigValues) => {
+    setSubmitError(undefined)
+    const started = () => {
+      if (mode === "manual") onModeChange("tuning")
+      advanceToRun()
+    }
     submitRun.mutate(
       { experimentId, simulationPath: simulation.simulation_path, data: toJobRequest(engine, values) },
       {
         onSuccess: () => {
           setConfirmNewRun(null)
           toast.success("Run started")
-          advanceToRun()
+          started()
         },
         onError: (error) => {
           setConfirmNewRun(null)
-          const apiError = toApiError(error)
-          toast.error(apiError.message)
           // The 409 live-run conflict: the goal is met despite the error; go there.
-          if (apiError.status === 409) advanceToRun()
+          if (toApiError(error).status === 409) started()
+          else setSubmitError(error)
         },
       }
     )
+  }
 
   const startRun = (values: HardwareConfigValues) => {
     if (priorTerminalRun) setConfirmNewRun(values)
@@ -237,6 +271,12 @@ export function TuneStep({
   }
 
   const picked = pickedRow !== undefined
+  // Once a tuner job has shown the tuning view it stays, so Re-tune lands on Start tuning.
+  if (job !== undefined && !tuneRequested) setTuneRequested(true)
+  // Without defaults tuning is the way forward; with them it waits for Tune first or an existing tuner job.
+  const showTuning = defaults === null || tuneRequested || job !== undefined
+  const blockers = setupBlockers(simulation, engine)
+  const tunerError = missing || !jobQuery.isError ? undefined : jobQuery.error
 
   // Clear a stale pick: job deleted (404) or trial no longer present. `missing`
   // flips only after a resolved fetch, so a reloaded page never clears mid-load.
@@ -261,21 +301,50 @@ export function TuneStep({
         Tuning runs your simulation briefly across different hardware settings to find the fastest one.
       </p>
 
-      <Tabs value={mode} onValueChange={(next) => onModeChange(next as TuneMode)}>
-        <TabsList aria-label="Configuration method">
-          <TabsTrigger value="tuning">Tuning</TabsTrigger>
-          <TabsTrigger value="manual">Manual configuration</TabsTrigger>
-        </TabsList>
+      {defaults !== null && (
+        <p className="text-sm">Suggested by setup: {configSummary(engine, toHardwareValues(defaults))}</p>
+      )}
 
-        <TabsContent value="tuning" className="space-y-6 pt-4">
+      {/* The tuning view shows these itself; with it hidden they would vanish. */}
+      {!showTuning && blockers.length > 0 && <SetupBlockersAlert blockers={blockers} />}
+      {!showTuning && tunerError !== undefined && (
+        <ApiErrorAlert error={tunerError} onRetry={() => void jobQuery.refetch()} />
+      )}
+      {submitError !== undefined && mode !== "manual" && <ApiErrorAlert error={submitError} />}
+
+      <div className="flex flex-wrap gap-2">
+        {defaults !== null && (
+          <Button
+            type="button"
+            onClick={() => startRun(toHardwareValues(defaults))}
+            disabled={submitRun.isPending || blockers.length > 0}
+          >
+            {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+            Start with default
+          </Button>
+        )}
+        {!showTuning && (
+          <Button type="button" variant="outline" onClick={() => setTuneRequested(true)}>
+            <Gauge aria-hidden />
+            Tune first
+          </Button>
+        )}
+        <Button type="button" variant="outline" onClick={() => onModeChange("manual")}>
+          Expert
+        </Button>
+      </div>
+
+      {showTuning && (
+        <section aria-label="Tuning" className="space-y-6">
+          <Separator />
           <TuningBody
-            simulation={simulation}
             job={job}
             live={live}
             tunerSilent={tunerSilent}
             rows={rows}
             pending={jobQuery.isPending}
-            error={missing ? undefined : jobQuery.isError ? jobQuery.error : undefined}
+            error={tunerError}
+            blockers={blockers}
             onRetry={() => void jobQuery.refetch()}
             startPending={start.isPending}
             stopPending={stop.isPending}
@@ -290,43 +359,51 @@ export function TuneStep({
             engine={engine}
           />
           {pickedRow !== undefined && (
-            <CustomizeConfigSection
-              engine={engine}
-              row={pickedRow}
-              formId={CUSTOMIZE_FORM_ID}
-              onSubmit={startRun}
-              onValidityChange={setFormValid}
-            />
+            <>
+              <CustomizeConfigSection
+                engine={engine}
+                row={pickedRow}
+                formId={CUSTOMIZE_FORM_ID}
+                onSubmit={startRun}
+                onValidityChange={setCustomizeValid}
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  form={CUSTOMIZE_FORM_ID}
+                  disabled={submitRun.isPending || !(picked && customizeValid)}
+                >
+                  {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+                  Run Simulation
+                </Button>
+              </div>
+            </>
           )}
-        </TabsContent>
+        </section>
+      )}
 
-        <TabsContent value="manual" className="space-y-6 pt-4">
-          <div className="space-y-5">
-            <p className="text-text-muted text-xs font-semibold tracking-wide uppercase">Enter custom configuration</p>
-            <HardwareConfigForm
-              engine={engine}
-              formId={MANUAL_FORM_ID}
-              onSubmit={startRun}
-              onValidityChange={setFormValid}
-            />
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <Separator />
-
-      <div className="flex items-center justify-end gap-2">
-        {/* One submit button for whichever hardware form is active; validity
-            (and, in tuning mode, a real pick) gates the submit. */}
-        <Button
-          type="submit"
-          form={mode === "manual" ? MANUAL_FORM_ID : CUSTOMIZE_FORM_ID}
-          disabled={submitRun.isPending || (mode === "manual" ? !formValid : !(picked && formValid))}
-        >
-          {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
-          Run Simulation
-        </Button>
-      </div>
+      <Dialog open={mode === "manual"} onOpenChange={(open) => onModeChange(open ? "manual" : "tuning")}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Expert configuration</DialogTitle>
+            <DialogDescription>Set the run's hardware configuration yourself.</DialogDescription>
+          </DialogHeader>
+          <HardwareConfigForm
+            engine={engine}
+            initial={defaults === null ? undefined : toHardwareValues(defaults)}
+            formId={MANUAL_FORM_ID}
+            onSubmit={startRun}
+            onValidityChange={setManualValid}
+          />
+          {submitError !== undefined && <ApiErrorAlert error={submitError} />}
+          <DialogFooter>
+            <Button type="submit" form={MANUAL_FORM_ID} disabled={submitRun.isPending || !manualValid}>
+              {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
+              Run Simulation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           until https://github.com/CERIT-SC/design-system/pull/108 lands. */}
@@ -405,13 +482,13 @@ export function TuneStep({
 }
 
 type TuningBodyProps = {
-  simulation: Simulation
   job: TunerJob | undefined
   live: boolean
   tunerSilent: boolean
   rows: TrialRow[]
   pending: boolean
   error: unknown
+  blockers: string[]
   onRetry: () => void
   startPending: boolean
   stopPending: boolean
@@ -427,13 +504,13 @@ type TuningBodyProps = {
 }
 
 function TuningBody({
-  simulation,
   job,
   live,
   tunerSilent,
   rows,
   pending,
   error,
+  blockers,
   onRetry,
   startPending,
   stopPending,
@@ -461,23 +538,9 @@ function TuningBody({
   }
 
   if (job === undefined) {
-    const blockers: string[] = []
-    if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
-    const missingRequired = missingRequiredRoles(simulation, TUNE_REQUIRED_ROLES[engine])
-    if (missingRequired.length > 0) {
-      const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
-      blockers.push(`Missing files: ${labels.join(", ")}.`)
-    }
     return (
       <div className="space-y-4">
-        {blockers.length > 0 && (
-          <Alert variant="warning">
-            <AlertTitle>Finish setup first</AlertTitle>
-            <AlertDescription>
-              {blockers.join(" ")} Go back to the Setup step to fix this before tuning.
-            </AlertDescription>
-          </Alert>
-        )}
+        {blockers.length > 0 && <SetupBlockersAlert blockers={blockers} />}
         <div className="flex flex-wrap items-end gap-4">
           <NstepsField id="tune-nsteps-idle" value={draftNsteps} onValueChange={onDraftNstepsChange} />
           <Button type="button" onClick={() => onStart(draftNsteps)} disabled={startPending || blockers.length > 0}>

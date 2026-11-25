@@ -157,6 +157,18 @@ def _build_content(engine: Engine, payload: dict) -> dict:
     }
 
 
+def _valid_resources(engine: Engine, resources: object) -> object:
+    """`resources` when they pass the engine schema, else None, so an edit can repair a manifest with bad ones."""
+    schema = resolve_schema_url(schema_url(engine))
+    if resources is None or schema is None:
+        return None
+    try:
+        jsonschema.validate(resources, schema["properties"]["resources"])
+    except jsonschema.ValidationError:
+        return None
+    return resources
+
+
 def _rebase_files_to_manifest(files: dict, simulation_path: str) -> dict:
     """
     Strip the manifest-directory prefix from experiment-relative role values.
@@ -254,6 +266,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """Raw file role paths from the manifest."""
         f = self._raw.get("files")
         return f if isinstance(f, dict) else {}
+
+    @property
+    def resources(self) -> object:
+        """Raw `resources` from the manifest, unvalidated."""
+        return self._raw.get("resources")
+
+    @property
+    def default_resources(self) -> dict | None:
+        """Run resources the manifest suggests; None unless present and the manifest is valid."""
+        resources = self.resources
+        return resources if isinstance(resources, dict) and self.valid else None
 
     @property
     def resolved_files(self) -> dict[str, str]:
@@ -621,10 +644,18 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @classmethod
     def _save(
-        cls, experiment: "Experiment", simulation_path: str, payload: dict, *, current_name: str | None = None
+        cls,
+        experiment: "Experiment",
+        simulation_path: str,
+        payload: dict,
+        *,
+        current_name: str | None = None,
+        keep_resources: object = None,
     ) -> "Simulation":
         """Validate `payload` as the manifest content and write it (paths rebased to manifest-relative)."""
         content = _build_content(experiment.engine, payload)
+        if keep_resources is not None:
+            content["resources"] = keep_resources
         content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment.id, str(content.get("name", "")), current_name=current_name)
@@ -681,4 +712,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 "This simulation is in use by a running job; stop the job before editing it.",
             )
 
-        return cls._save(experiment, simulation_path, payload, current_name=current.name)
+        # Resources come from the setup notebook, not the edit form, so an edit keeps them.
+        return cls._save(
+            experiment,
+            simulation_path,
+            payload,
+            current_name=current.name,
+            keep_resources=_valid_resources(experiment.engine, current.resources),
+        )

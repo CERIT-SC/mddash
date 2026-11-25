@@ -1,2 +1,2 @@
 export { RunStep } from "./run-step"
-export { jobProgressPercent, useSimulationJobQuery } from "./use-simulation-job"
+export { jobConfigRequest, jobProgressPercent, useSimulationJobQuery } from "./use-simulation-job"

@@ -208,6 +208,99 @@ class TestValidation:
             sim.require_files()
 
 
+GMX_RESOURCES = {"np": 2, "ntomp": 8, "pme": "gpu", "nb": "gpu"}
+AMBER_RESOURCES = {"binary": "pmemd.cuda", "ewald": "optimized", "np": 1, "ntomp": 4}
+
+
+class TestDefaultResources:
+    """The manifest's optional `resources` become the run defaults."""
+
+    @pytest.mark.parametrize(("engine", "resources"), [(Engine.GMX, GMX_RESOURCES), (Engine.AMBER, AMBER_RESOURCES)])
+    async def test_valid_resources_are_the_defaults(
+        self,
+        db_session: AsyncSession,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+        engine: Engine,
+        resources: dict,
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment(engine=engine)
+        sim_path = write_simulation(exp_dir, engine=engine, resources=resources)
+
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
+
+        assert not any("resources" in error for error in sim.errors)
+        assert sim.default_resources == resources
+
+    async def test_no_resources_means_no_defaults(
+        self, db_session: AsyncSession, seed_experiment: SeedExperiment, jobs: JobsService
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(exp_dir)
+
+        assert (await _sim(db_session, jobs, exp_id, sim_path)).default_resources is None
+
+    @pytest.mark.parametrize(
+        "resources",
+        [
+            {**GMX_RESOURCES, "np": 0},
+            {**GMX_RESOURCES, "pme": "tpu"},
+            {k: v for k, v in GMX_RESOURCES.items() if k != "nb"},
+            {**GMX_RESOURCES, "gpus": 1},
+            AMBER_RESOURCES,
+        ],
+    )
+    async def test_invalid_resources_invalidate_the_manifest(
+        self, db_session: AsyncSession, seed_experiment: SeedExperiment, jobs: JobsService, resources: dict
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(exp_dir, resources=resources)
+
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
+
+        assert not sim.valid
+        assert sim.default_resources is None
+
+    async def test_update_keeps_the_notebook_resources(
+        self, db_session: AsyncSession, tmp_path: Path, seed_experiment: SeedExperiment, jobs: JobsService
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(exp_dir, resources=GMX_RESOURCES)
+
+        Simulation.update(
+            await _experiment(db_session, jobs, exp_id),
+            sim_path,
+            {"name": "protein", "files": GMX_FILES, "extra_args": "-v"},
+        )
+
+        on_disk = json.loads((tmp_path / exp_id / sim_path).read_text())
+        assert on_disk["resources"] == GMX_RESOURCES
+
+    async def test_update_drops_invalid_resources(
+        self, db_session: AsyncSession, tmp_path: Path, seed_experiment: SeedExperiment, jobs: JobsService
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(exp_dir, resources={**GMX_RESOURCES, "np": 0})
+
+        sim = Simulation.update(
+            await _experiment(db_session, jobs, exp_id),
+            sim_path,
+            {"name": "protein", "files": GMX_FILES, "extra_args": ""},
+        )
+
+        assert sim.valid
+        assert "resources" not in json.loads((tmp_path / exp_id / sim_path).read_text())
+
+    async def test_route_returns_the_defaults(self, client: AsyncClient, seed_experiment: SeedExperiment) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, resources=GMX_RESOURCES)
+
+        response = await client.get(f"/dash/api/experiments/{exp_id}/simulations")
+
+        assert response.status_code == 200
+        assert response.json()[0]["default_resources"] == GMX_RESOURCES
+
+
 class TestBrokenManifestRoute:
     """A hand-broken manifest is listed as invalid, never a 500."""
 

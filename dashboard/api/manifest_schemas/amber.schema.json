@@ -20,7 +20,19 @@
         "trajectory": { "$ref": "#/$defs/relpath" }
       }
     },
-    "extra_args": { "type": "string" }
+    "extra_args": { "type": "string" },
+    "resources": {
+      "type": "object",
+      "description": "Suggested production-run resources; the run request's shape.",
+      "required": ["binary", "ewald", "np", "ntomp"],
+      "additionalProperties": false,
+      "properties": {
+        "binary": { "enum": ["pmemd.cuda", "pmemd.MPI"] },
+        "ewald": { "enum": ["default", "optimized"] },
+        "np": { "type": "integer", "minimum": 1 },
+        "ntomp": { "type": "integer", "minimum": 1 }
+      }
+    }
   },
   "$defs": {
     "relpath": {

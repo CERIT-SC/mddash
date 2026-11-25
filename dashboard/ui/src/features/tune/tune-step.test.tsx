@@ -273,13 +273,13 @@ describe("TuneStep idle state", () => {
     expect(screen.queryByText("Finish setup first")).not.toBeInTheDocument()
   })
 
-  it("clears a carried-over pick and keeps Run disabled on a simulation with no tuner job", async () => {
+  it("clears a carried-over pick and offers no Run on a simulation with no tuner job", async () => {
     // Regression: a cross-tab pick survived on a job-less simulation and enabled Run.
     mockTuner(null)
     const spies = renderTune({ trialId: "t1" })
 
     await screen.findByRole("button", { name: /start tuning/i })
-    expect(screen.getByRole("button", { name: /run simulation/i })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: /run simulation/i })).not.toBeInTheDocument()
     expect(spies.onTrialIdChange).toHaveBeenCalledWith(undefined)
   })
 })
@@ -299,7 +299,7 @@ describe("TuneStep running job", () => {
     expect(screen.getAllByRole("img", { name: "Running" })).not.toHaveLength(0)
     expect(screen.getByRole("radio", { name: "Pick configuration t3" })).toBeDisabled()
 
-    expect(screen.getByRole("button", { name: /run simulation/i })).toBeDisabled()
+    expect(screen.queryByRole("button", { name: /run simulation/i })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("radio", { name: "Pick configuration t2" }))
     expect(spies.onTrialIdChange).toHaveBeenCalledWith("t2")
@@ -343,7 +343,7 @@ describe("TuneStep running job", () => {
     const { calls } = mockTuner(job)
     const spies = renderTune({ trialId: "t2" })
 
-    const run = screen.getByRole("button", { name: /run simulation/i })
+    const run = await screen.findByRole("button", { name: /run simulation/i })
     // The gate waits for the job load: the pick must exist in the job's trials.
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
@@ -360,7 +360,7 @@ describe("TuneStep running job", () => {
     mockTuner(job, { submitConflicts: true })
     const spies = renderTune({ trialId: "t2" })
 
-    const run = screen.getByRole("button", { name: /run simulation/i })
+    const run = await screen.findByRole("button", { name: /run simulation/i })
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
 
@@ -371,7 +371,7 @@ describe("TuneStep running job", () => {
     const { calls } = mockTuner(job, { priorRun: { id: "old", status: "FINISHED", is_live: false } })
     const spies = renderTune({ trialId: "t2" })
 
-    const run = screen.getByRole("button", { name: /run simulation/i })
+    const run = await screen.findByRole("button", { name: /run simulation/i })
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
 
@@ -389,7 +389,7 @@ describe("TuneStep running job", () => {
     const { calls } = mockTuner(job, { submitFails: true })
     const spies = renderTune({ trialId: "t2" })
 
-    const run = screen.getByRole("button", { name: /run simulation/i })
+    const run = await screen.findByRole("button", { name: /run simulation/i })
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
 
@@ -444,12 +444,35 @@ describe("TuneStep finished and error jobs", () => {
   })
 })
 
-describe("TuneStep manual tab", () => {
-  it("renders the manual form and reports tab switches", async () => {
+describe("TuneStep defaults and Expert", () => {
+  it("starts the run with the setup's default resources", async () => {
+    const { calls } = mockTuner(null)
+    const spies = renderTune({
+      simulation: simulation(SIM, {
+        valid: true,
+        files: { run_input: "prod.tpr", reference_structure: "ref.gro", trajectory: "prod.xtc" },
+        default_resources: { np: 2, ntomp: 8, pme: "gpu", nb: "gpu" },
+      }),
+    })
+
+    expect(screen.getByText(/2 ranks × 8 threads · PME on GPU, non-bonded on GPU/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: /start with default/i }))
+    await waitFor(() =>
+      expect(calls.find((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))?.body).toEqual({
+        np: 2,
+        ntomp: 8,
+        pme: "gpu",
+        nb: "gpu",
+      })
+    )
+    expect(spies.onRunStarted).toHaveBeenCalledTimes(1)
+  })
+
+  it("opens the Expert dialog through the URL", async () => {
     mockTuner(null)
     const spies = renderTune()
 
-    await userEvent.click(screen.getByRole("tab", { name: /manual configuration/i }))
+    await userEvent.click(screen.getByRole("button", { name: "Expert" }))
     expect(spies.onModeChange).toHaveBeenCalledWith("manual")
   })
 
@@ -529,7 +552,7 @@ describe("TuneStep customize selected configuration", () => {
     expect(screen.getByPlaceholderText("Enter number of ranks")).toHaveValue(1)
     expect(screen.getByPlaceholderText("Enter number of threads")).toHaveValue(2)
 
-    const run = screen.getByRole("button", { name: /run simulation/i })
+    const run = await screen.findByRole("button", { name: /run simulation/i })
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.clear(screen.getByPlaceholderText("Enter number of ranks"))
     await waitFor(() => expect(run).toBeDisabled())

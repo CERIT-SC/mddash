@@ -21,3 +21,22 @@ export function toJobRequest(engine: Engine, values: HardwareConfigValues): Grom
     ntomp: values.ntomp,
   }
 }
+
+/** Seeds the hardware form from a run request (the inverse of toJobRequest). */
+export function toHardwareValues(request: GromacsJobRequest | AmberJobRequest): HardwareConfigValues {
+  const picks =
+    "binary" in request ? { pickA: request.binary, pickB: request.ewald } : { pickA: request.pme, pickB: request.nb }
+  return { ...picks, np: request.np, ntomp: request.ntomp }
+}
+
+const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
+
+/** One line naming a run configuration, e.g. "2 ranks × 8 threads · PME on GPU, non-bonded on GPU". */
+export function configSummary(engine: Engine, values: HardwareConfigValues): string {
+  const split = `${count(values.np, "rank")} × ${count(values.ntomp, "thread")}`
+  const placement =
+    engine === Engine.AMBER
+      ? `${values.pickA}, ${values.pickB} Ewald`
+      : `PME on ${values.pickA.toUpperCase()}, non-bonded on ${values.pickB.toUpperCase()}`
+  return `${split} · ${placement}`
+}

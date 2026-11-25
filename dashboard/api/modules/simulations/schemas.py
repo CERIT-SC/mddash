@@ -6,6 +6,9 @@ from core.enums import Engine, Step
 from core.schemas import OrmModel
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from modules.jobs.amber.schemas import AmberJobRequest
+from modules.jobs.gmx.schemas import GromacsJobRequest
+
 
 def _string_roles(value: Any) -> Any:  # ruff:ignore[any-type]
     """Hand-edited manifests may hold non-string or empty role values; those are reported as errors, not echoed."""
@@ -39,6 +42,8 @@ class Simulation(OrmModel):
     files: ManifestFiles
     resolved_files: ManifestFiles
     extra_args: str
+    # The manifest's suggested run resources (the engine's run request), when it has valid ones.
+    default_resources: GromacsJobRequest | AmberJobRequest | None
     locked: bool
     valid: bool
     errors: list[str]
