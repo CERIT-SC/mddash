@@ -306,92 +306,16 @@ def test_migration_012_adds_segment_progress_and_live_uniqueness(tmp_path: Path)
     assert live_index.get("dialect_options", {}).get("sqlite_where") is not None
 
 
-def _insert_operation(conn, op_id: str, experiment_id: str, status: str = "queued") -> None:
-    conn.execute(
-        sa.text(
-            "INSERT INTO population_operations (id, experiment_id, name, repo_url, job_name, engine, status, "
-            "created_at, updated_at) VALUES (:id, :experiment_id, 'op', 'https://mdposit.mddbr.eu/#/id/MD-A000NX/overview', "
-            ":job_name, 'GMX', :status, '2026-11-01', '2026-11-01')"
-        ),
-        {"id": op_id, "experiment_id": experiment_id, "job_name": f"dh-{op_id}", "status": status},
-    )
-
-
-def test_migration_016_backfills_orphan_operations(tmp_path: Path) -> None:
-    """Orphan queued/running operations gain a provisional Experiment + Notebook reusing the reserved ID."""
+def test_migration_015_creates_owned_population_operations(tmp_path: Path) -> None:
+    """Operations are owned one-to-one by an experiment and are removed with it."""
     app = _MigratedDb(tmp_path / "test.db")
     _upgrade_to(app, "015")
-    with app.engine.begin() as conn:
-        # A succeeded operation already owns its experiment row.
-        conn.execute(
-            sa.text(
-                "INSERT INTO experiments (id, created_at, updated_at, name, source_type, source_ref, engine) "
-                "VALUES ('done1', '2026-11-01', '2026-11-01', 'done', 'REPO', 'https://x.org', 'GMX')"
-            )
-        )
-        _insert_operation(conn, "a" * 16, "done1", status="succeeded")
-        # Legacy orphans: reserved directory IDs without Experiment rows.
-        _insert_operation(conn, "b" * 16, "wait1", status="queued")
-        _insert_operation(conn, "c" * 16, "wait2", status="running")
-        _insert_operation(conn, "d" * 16, "fail1", status="failed")
-
-    _upgrade_to(app, "head")
-
-    cols = _column_names(app.engine, "population_operations")
-    assert {"phase", "files_present", "files_total", "bytes_present", "bytes_total"} <= cols
-
-    with app.engine.connect() as conn:
-        rows = {
-            r.id: (r.name, r.source_type, r.source_ref)
-            for r in conn.execute(
-                sa.text(
-                    "SELECT id, name, source_type, source_ref FROM experiments "
-                    "WHERE id IN ('wait1', 'wait2', 'fail1', 'done1')"
-                )
-            )
-        }
-    assert rows["wait1"][1:] == ("REPO", "https://mdposit.mddbr.eu/#/id/MD-A000NX/overview")
-    assert rows["wait2"][0] == "op"
-    assert "fail1" in rows
-    assert "done1" in rows
-
-    with app.engine.connect() as conn:
-        notebooks = (
-            conn
-            .execute(sa.text("SELECT experiment_id FROM notebooks WHERE experiment_id IN ('wait1', 'wait2', 'fail1')"))
-            .scalars()
-            .all()
-        )
-    assert sorted(notebooks) == ["fail1", "wait1", "wait2"]
 
     indexes = {ix["name"]: ix for ix in sa_inspect(app.engine).get_indexes("population_operations")}
-    fk_index = indexes.get("ix_population_operations_experiment_id")
-    assert fk_index is not None
-    assert fk_index["unique"]
-    fks = sa_inspect(app.engine).get_foreign_keys("population_operations")
-    assert any(fk["referred_table"] == "experiments" for fk in fks)
-
-    # Failed rows keep their status; ORM reads must not crash on enum names.
-    from modules.population.models import PopulationOperation
-
-    ops = app.session.scalars(sa.select(PopulationOperation)).all()
-    assert {op.experiment_id: op.status.value for op in ops} == {
-        "done1": "succeeded",
-        "wait1": "queued",
-        "wait2": "running",
-        "fail1": "failed",
-    }
-
-
-def test_migration_016_rejects_orphan_succeeded_operation(tmp_path: Path) -> None:
-    """A succeeded operation without an experiment row is a data error, not a guess."""
-    app = _MigratedDb(tmp_path / "test.db")
-    _upgrade_to(app, "015")
-    with app.engine.begin() as conn:
-        _insert_operation(conn, "e" * 16, "ghost", status="succeeded")
-
-    with pytest.raises(RuntimeError, match="no experiment row"):
-        _upgrade_to(app, "head")
+    assert indexes["ix_population_operations_experiment_id"]["unique"]
+    (fk,) = sa_inspect(app.engine).get_foreign_keys("population_operations")
+    assert fk["referred_table"] == "experiments"
+    assert fk["options"].get("ondelete") == "CASCADE"
 
 
 def test_migration_014_collapses_to_one_run_per_simulation(tmp_path: Path) -> None:
