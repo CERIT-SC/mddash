@@ -1,9 +1,19 @@
 """Proxy runtime configuration contract tests."""
 
+import ipaddress
 import json
 import os
 import subprocess
 from pathlib import Path
+
+
+def test_admin_api_listens_on_loopback_only() -> None:
+    """The admin API rewrites routes without auth, so only in-pod callers may reach it."""
+    caddyfile = (Path(__file__).parents[3] / "proxy" / "Caddyfile").read_text(encoding="utf-8")
+    global_options = caddyfile.split("\n}", 1)[0]
+    admin = next(line.split()[1] for line in global_options.splitlines() if line.split()[:1] == ["admin"])
+
+    assert ipaddress.ip_address(admin.rpartition(":")[0]).is_loopback
 
 
 def test_runtime_config_is_not_cached() -> None:
