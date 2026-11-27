@@ -31,9 +31,8 @@ ENV DATA_DIR=/mddash
 ENV HOME=/home/app
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 5000
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:5000/health || exit 1
 
-CMD ["uvicorn", "app:create_app", "--factory", "--host", "0.0.0.0", "--port", "5000"]
+# Loopback only: the API has no auth of its own; in-pod callers reach it behind the proxy's forward_auth.
+CMD ["uvicorn", "app:create_app", "--factory", "--host", "127.0.0.1", "--port", "5000"]

@@ -15,11 +15,11 @@ Shared infrastructure that manages the platform and compute resources.
 
 Isolated environment created for each logged-in user. All containers share a PVC mounted at `/mddash`.
 
-- **Proxy (Caddy).** `dashboard/proxy/`, ports `8888` and `2019` (admin). Single entry point for the user pod; routes traffic to the UI, API, or Jupyter, and serves the compiled frontend.
+- **Proxy (Caddy).** `dashboard/proxy/`, port `8888`, admin API on loopback `2019`. Single entry point for the user pod; routes traffic to the UI, API, or Jupyter, and serves the compiled frontend.
 - **JupyterHub Singleuser.** Configured in `helm/charts/mddash/values.yaml.tmpl`, port `8080`. Standard interface JupyterHub uses to manage the pod's lifecycle.
-- **Forward auth.** `dashboard/auth/`, port `5001`. Validates JupyterHub sessions before requests reach the API or UI.
+- **Forward auth.** `dashboard/auth/`, loopback port `5001`. Validates JupyterHub sessions before requests reach the API or UI.
 - **UI.** `dashboard/ui/`. Graphical interface for experiment setup, monitoring, and the five-step wizard.
-- **API.** `dashboard/api/`, port `5000`. Business logic: experiment state, and coordination between the UI and the simulation services.
+- **API.** `dashboard/api/`, loopback port `5000`. Business logic: experiment state, and coordination between the UI and the simulation services.
 - **S3 sync daemon.** `dashboard/s3-sync/`. Continuously syncs user data between the PVC and S3 (`rclone bisync`).
 - **Analysis job.** Executed from `dashboard/api/modules/jobs/analysis/models.py`. Runs on-demand analysis jobs against experiment data.
 - **Jupyter notebooks.** `notebook/`. Interactive environment for setup tasks that need manual visualization or intervention.

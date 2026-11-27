@@ -22,9 +22,8 @@ USER app
 
 ENV PATH="/app/.venv/bin:$PATH"
 
-EXPOSE 5001
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --spider --quiet http://localhost:5001/health || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--access-logfile", "-", "--error-logfile", "-", "--logger-class", "gunicorn_logging.HealthCheckFilter", "auth:app"]
+# Loopback only: the in-pod proxy is the sole caller.
+CMD ["gunicorn", "--bind", "127.0.0.1:5001", "--workers", "1", "--access-logfile", "-", "--error-logfile", "-", "--logger-class", "gunicorn_logging.HealthCheckFilter", "auth:app"]

@@ -5,7 +5,8 @@
 		format console
 	}
 
-	admin 0.0.0.0:2019
+	# Loopback only: the admin API rewrites routes without auth; the in-pod API calls it via localhost.
+	admin 127.0.0.1:2019
 
 	auto_https off
 }
