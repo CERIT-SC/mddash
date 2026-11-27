@@ -1,9 +1,26 @@
 """Proxy runtime configuration contract tests."""
 
+import ipaddress
 import json
 import os
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from clients.caddy import CADDY_ADMIN_API_URL
+
+
+def test_admin_api_listens_on_loopback_where_the_api_calls_it() -> None:
+    """The admin API rewrites routes without auth, so only in-pod callers like the API's Caddy client may reach it."""
+    caddyfile = (Path(__file__).parents[3] / "proxy" / "Caddyfile").read_text(encoding="utf-8")
+    global_options = caddyfile.split("\n}", 1)[0]
+    admin = next(line.split()[1] for line in global_options.splitlines() if line.split()[:1] == ["admin"])
+    host, _, port = admin.rpartition(":")
+    client = urlsplit(CADDY_ADMIN_API_URL)
+
+    assert ipaddress.ip_address(host).is_loopback
+    # Caddy checks the Host header on a loopback admin listener; it accepts localhost and the bound address.
+    assert (client.hostname, client.port) in {("localhost", int(port)), (host, int(port))}
 
 
 def test_runtime_config_is_not_cached() -> None:

@@ -431,7 +431,6 @@ def _auth_container(
         "name": "auth",
         "image": image,
         "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
-        "ports": [{"containerPort": 5001, "name": "auth"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
             {"name": "JUPYTERHUB_CLIENT_ID", "value": jupyterhub_env.get("JUPYTERHUB_CLIENT_ID", "")},
@@ -505,7 +504,6 @@ def _api_container(
         "name": "api",
         "image": image,
         "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
-        "ports": [{"containerPort": 5000, "name": "api"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
             {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},

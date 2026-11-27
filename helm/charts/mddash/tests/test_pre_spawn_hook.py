@@ -594,6 +594,28 @@ def test_proxy_container_built_from_image_env(monkeypatch: pytest.MonkeyPatch) -
     assert container["securityContext"]["runAsUser"] == NON_ROOT_UID
 
 
+def test_proxy_reaches_auth_and_api_over_loopback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The auth and api sidecars listen on 127.0.0.1 only, so the Caddyfile's upstream hosts must resolve to it."""
+    module = _load_module(monkeypatch)
+    _set_images(monkeypatch, PROXY_IMAGE="proxy:1")
+
+    container = module._proxy_container("/user/alice", "alice", {})
+
+    env = {e["name"]: e["value"] for e in container["env"]}
+    assert {env["AUTH_HOST"], env["API_HOST"]} <= {"localhost", "127.0.0.1"}
+
+
+def test_only_the_proxy_declares_a_sidecar_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The auth and api sidecars listen on loopback, so the pod spec must not advertise their ports."""
+    module = _load_module(monkeypatch)
+    _set_images(monkeypatch, PROXY_IMAGE="proxy:1", AUTH_IMAGE="auth:1", API_IMAGE="api:1", S3_SYNC_IMAGE="sync:1")
+
+    spawner = _FakeSpawner(username="alice")
+    containers = module._get_sidecar_containers(spawner, "bucket", "pvc", "vol", "mddash-user-alice-ns")
+
+    assert [c["name"] for c in containers if "ports" in c] == ["proxy"]
+
+
 def test_auth_container_reads_jupyterhub_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """The auth container forwards JupyterHub OAuth env and the cross-namespace hub API URL."""
     module = _load_module(monkeypatch)
